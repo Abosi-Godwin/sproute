@@ -1,8 +1,25 @@
 import { Search } from "lucide-react";
 import { useSearchStore } from "../../lib/stores/useSearchStore";
-import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 
 const LOCATIONS = ["Asaba", "Lagos", "Port Harcourt", "Abuja", "Enugu"];
+
+const CATEGORIES = [
+    "Restaurant",
+    "Boutique",
+    "Hotel","Bar",
+    "Pharmacy",
+    "Salon",
+    "Supermarket",
+    "Church",
+    "School",
+    "Mechanic",
+    "Bakery",
+    "Gym",
+    "Hospital",
+    
+    "Spa",
+    "Laundry"
+];
 
 interface SearchBarProps {
     onSearch: () => void;
@@ -23,11 +40,9 @@ export default function SearchBar({ onSearch, isGeocoding }: SearchBarProps) {
         setFilter
     } = useSearchStore();
 
-    const { defaultLocation } = useSettingsStore();
-    
-    
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
+            {/* Inputs */}
             <div className="flex flex-col gap-3">
                 <input
                     type="text"
@@ -40,8 +55,7 @@ export default function SearchBar({ onSearch, isGeocoding }: SearchBarProps) {
                 {locationMode === "quick" ? (
                     <div className="space-y-1.5">
                         <select
-                            value={location || defaultLocation}
-                            onChange={e => setLocation(e.target.value)}
+                            value={location}
                             onChange={e => setLocation(e.target.value)}
                             className="w-full bg-base-800 border border-base-700 rounded-lg px-4 py-2.5 text-sm text-base-100 focus:outline-none focus:border-brand-500 transition-colors"
                         >
@@ -76,6 +90,26 @@ export default function SearchBar({ onSearch, isGeocoding }: SearchBarProps) {
                         </button>
                     </div>
                 )}
+            </div>
+
+            {/* Quick Categories */}
+            <div className="space-y-2">
+                <p className="text-xs text-base-500">Quick categories</p>
+                <div className="flex gap-2 flex-wrap">
+                    {CATEGORIES.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setQuery(cat)}
+                            className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                                query === cat
+                                    ? "bg-brand-500/10 text-brand-400"
+                                    : "bg-base-800 text-base-500 hover:text-base-300"
+                            }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Filters */}

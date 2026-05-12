@@ -14,7 +14,7 @@ import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 
 export default function MessageGenerator({ lead }: { lead: Lead }) {
     const { logActivity, saveGeneratedMessage } = useLeadsStore();
-    const { outreachTone } = useSettingsStore();
+    const { outreachTone, serviceDescription } = useSettingsStore();
 
     const [message, setMessage] = useState(lead.generatedMessage ?? "");
     const [isLoading, setIsLoading] = useState(false);
@@ -26,9 +26,9 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
         setError("");
 
         const toneInstructions: Record<string, string> = {
-            casual: `Write in first person, conversational Nigerian English tone. Warm, direct, like a trusted friend reaching out.`,
-            formal: `Write in first person, professional but approachable tone. Respectful and clear, like a business consultant.`,
-            pidgin: `Write in first person, Nigerian Pidgin English. Natural, street-smart, like someone from the area talking to a neighbour.`
+            casual: `Casual Nigerian English. Warm and direct like a trusted neighbour texting.`,
+            formal: `Professional but approachable. Clear and respectful like a business consultant.`,
+            pidgin: `Pure Nigerian Pidgin English throughout. Natural and street-smart, every sentence in Pidgin.`
         };
 
         try {
@@ -41,20 +41,20 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
                         systemInstruction: {
                             parts: [
                                 {
-                                    text: `You are an expert cold outreach copywriter who gets Nigerian SME owners to respond on WhatsApp.
+                                    text: `You write WhatsApp cold outreach messages for a freelance service provider.
+
+Service offered: ${serviceDescription || "web development and online solutions"}
+Tone: ${toneInstructions[outreachTone]}
 
 Every message must:
-- Start with a warm, natural greeting — "Hi" or "Hello" followed by the business name, nothing formal
-- Follow immediately with a specific observation about their business that shows you actually looked them up
-- Hit one real pain point: no online presence means customers searching Google never find them and go straight to a competitor who does have a website
-- Make the value feel real and local — connect it to their specific business type and Nigerian market context
-- Sound like a trusted person reaching out, not a vendor pitching
-- Close with one question so easy and low-commitment they almost can't say no
-- Never use: "I hope this message finds you well", "I came across your business", emojis, formal language, or anything that sounds AI-generated
-- Never fabricate or assume a person's name — only use the business name
-- Maximum 3 short paragraphs, each under 2 sentences
-- If the message takes more than 10 seconds to read, it is too long
-- ${toneInstructions[outreachTone]}`
+- Start with "Hi [Business Name]," on its own line
+- One sentence observing something specific about their business
+- One sentence connecting their pain point to how this specific service solves it
+- Close with a warm offer — wrong: "You no even think about that?", right: "I
+fit help with that — can we give it a try?"
+- Never more than 4 lines total
+- No paragraphs. No long explanations. No "imagine if"
+- Never fabricate a person's name — only use the business name`
                                 }
                             ]
                         },
@@ -67,6 +67,7 @@ Category: ${lead.category}
 Location: ${lead.address}
 Has website: ${lead.website ? `yes — ${lead.website}` : "no"}
 Phone: ${lead.phone ?? "not available"}
+Additional context: ${lead.notes ? lead.notes : "none"}
 
 Write a WhatsApp outreach message for this business owner.`
                                     }

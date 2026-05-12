@@ -4,23 +4,27 @@ import { persist } from 'zustand/middleware';
 export type OutreachTone = 'casual' | 'formal' | 'pidgin';
 
 interface SettingsStore {
-  claudeApiKey: string;
   defaultLocation: string;
   outreachTone: OutreachTone;
-  setClaudeApiKey: (key: string) => void;
+  followUpDays: number;
+  serviceDescription: string;
   setDefaultLocation: (location: string) => void;
   setOutreachTone: (tone: OutreachTone) => void;
+  setFollowUpDays: (days: number) => void;
+  setServiceDescription: (description: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
-      claudeApiKey: '',
       defaultLocation: '',
       outreachTone: 'casual',
-      setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
+      followUpDays: 2,
+      serviceDescription: '',
       setDefaultLocation: (defaultLocation) => set({ defaultLocation }),
       setOutreachTone: (outreachTone) => set({ outreachTone }),
+      setFollowUpDays: (followUpDays) => set({ followUpDays }),
+      setServiceDescription: (serviceDescription) => set({ serviceDescription }),
     }),
     { name: 'sproute-settings' }
   )

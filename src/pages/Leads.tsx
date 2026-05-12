@@ -6,7 +6,7 @@ import { Lead, LeadStatus } from "../types";
 import LeadsFilter from "../components/leads/LeadsFilter";
 import LeadsGroup from "../components/leads/LeadsGroup";
 import { exportLeadsToCsv } from "../utils/exportCsv";
-import { Download, Trash2, Users } from "lucide-react";
+import { Download, Trash2, Search, Users, Loader2 } from "lucide-react";
 
 function groupLeads(
     leads: Lead[],
@@ -28,7 +28,8 @@ function groupLeads(
 
 export default function Leads() {
     const [selected, setSelected] = useState<string[]>([]);
-    const { leads, deleteLead } = useLeadsStore();
+    const { leads, deleteLead, isLoading } = useLeadsStore();
+    const navigate = useNavigate();
     const {
         selectedStatus,
         noWebsiteOnly,
@@ -131,7 +132,11 @@ export default function Leads() {
 
             <LeadsFilter />
 
-            {filtered.length === 0 ? (
+            {isLoading ? (
+                <div className="flex justify-center py-16">
+                    <Loader2 className="w-6 h-6 text-brand-400 animate-spin" />
+                </div>
+            ) : filtered.length === 0 ? (
                 leads.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                         <div className="w-14 h-14 rounded-2xl bg-brand-500/10 flex items-center justify-center">

@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { clsx } from 'clsx';
+import { clsx } from "clsx";
 import { SearchResult } from "../../types";
 import { useSearchStore } from "../../lib/stores/useSearchStore";
 import ResultCard from "./ResultCard";
 
 type SortOption = "default" | "no-website" | "has-phone" | "rating";
 
-export default function ResultsGrid({ results }: { results: SearchResult[] }) {
+interface ResultsGridProps {
+    results: SearchResult[];
+    searchQuery: string;
+    searchLocation: string;
+}
+
+export default function ResultsGrid({
+    results,
+    searchQuery,
+    searchLocation,
+    
+}: ResultsGridProps) {
     const { filters } = useSearchStore();
     const [sort, setSort] = useState<SortOption>("default");
 
@@ -17,15 +28,10 @@ export default function ResultsGrid({ results }: { results: SearchResult[] }) {
     });
 
     const sorted = [...filtered].sort((a, b) => {
-        if (sort === "no-website") {
+        if (sort === "no-website")
             return (a.website ? 1 : 0) - (b.website ? 1 : 0);
-        }
-        if (sort === "has-phone") {
-            return (b.phone ? 1 : 0) - (a.phone ? 1 : 0);
-        }
-        if (sort === "rating") {
-            return (b.rating ?? 0) - (a.rating ?? 0);
-        }
+        if (sort === "has-phone") return (b.phone ? 1 : 0) - (a.phone ? 1 : 0);
+        if (sort === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
         return 0;
     });
 
@@ -67,7 +73,12 @@ export default function ResultsGrid({ results }: { results: SearchResult[] }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sorted.map(result => (
-                    <ResultCard key={result.placeId} result={result} />
+                    <ResultCard
+                        key={result.placeId}
+                        result={result}
+                        searchQuery={searchQuery}
+                        searchLocation={searchLocation}
+                    />
                 ))}
             </div>
         </div>

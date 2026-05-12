@@ -1,23 +1,9 @@
-import { useState } from 'react';
+ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { useUIStore } from '../../lib/stores/useUIStore';
-import { Search, BookmarkCheck, MessageCircle, Sparkles, ArrowRight } from 'lucide-react';
-
-const steps = [
-  {
-    id: 1,
-    component: Step1,
-  },
-  {
-    id: 2,
-    component: Step2,
-  },
-  {
-    id: 3,
-    component: Step3,
-  },
-];
+import { useSettingsStore } from '../../lib/stores/useSettingsStore';
+import { Search, BookmarkCheck, MessageCircle, Sparkles, ArrowRight, Briefcase } from 'lucide-react';
 
 function Step1({ onNext }: { onNext: () => void }) {
   return (
@@ -95,7 +81,79 @@ function Step2({ onNext }: { onNext: () => void }) {
   );
 }
 
-function Step3({ onFinish }: { onFinish: () => void }) {
+function Step3({ onNext }: { onNext: () => void }) {
+  const { serviceDescription, setServiceDescription } = useSettingsStore();
+  const [value, setValue] = useState(serviceDescription);
+
+  const handleNext = () => {
+    if (value.trim()) {
+      setServiceDescription(value.trim());
+    }
+    onNext();
+  };
+
+  return (
+    <div className="flex flex-col items-center text-center gap-6 w-full max-w-sm">
+      <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center">
+        <Briefcase className="w-8 h-8 text-brand-400" />
+      </div>
+      <div className="space-y-2">
+        <h2 className="font-display text-2xl font-bold text-base-50">
+          What do you offer?
+        </h2>
+        <p className="text-base-400 text-sm max-w-xs leading-relaxed">
+          This helps Sproute write outreach messages tailored to your specific skill or service.
+        </p>
+      </div>
+
+      <div className="w-full space-y-3">
+        <input
+          type="text"
+          placeholder="e.g. Web development, Photography, Plumbing, Catering..."
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-full bg-base-800 border border-base-700 rounded-xl px-4 py-3 text-sm text-base-100 placeholder:text-base-500 focus:outline-none focus:border-brand-500 transition-colors"
+        />
+
+        {/* Quick picks */}
+        <div className="flex flex-wrap gap-2 justify-center">
+          {['Web development', 'Photography', 'Plumbing', 'Catering', 'Graphic design', 'Electrical'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setValue(s)}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                value === s
+                  ? 'bg-brand-500/10 text-brand-400'
+                  : 'bg-base-800 text-base-500 hover:text-base-300'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-2 w-full">
+        <button
+          onClick={handleNext}
+          disabled={!value.trim()}
+          className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-xl transition-colors"
+        >
+          Continue
+          <ArrowRight className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onNext}
+          className="text-xs text-base-500 hover:text-base-300 transition-colors"
+        >
+          Skip for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Step4({ onFinish }: { onFinish: () => void }) {
   return (
     <div className="flex flex-col items-center text-center gap-6">
       <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center">
@@ -133,14 +191,15 @@ export default function OnboardingOverlay() {
   const StepComponents = [
     <Step1 onNext={() => setStep(1)} />,
     <Step2 onNext={() => setStep(2)} />,
-    <Step3 onFinish={handleFinish} />,
+    <Step3 onNext={() => setStep(3)} />,
+    <Step4 onFinish={handleFinish} />,
   ];
 
   return (
     <div className="fixed inset-0 z-50 bg-base-950/95 backdrop-blur-sm flex items-center justify-center p-6">
       {/* Progress dots */}
       <div className="absolute top-8 flex items-center gap-2">
-        {[0, 1, 2].map((i) => (
+        {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
             className={`h-1.5 rounded-full transition-all duration-300 ${

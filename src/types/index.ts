@@ -31,6 +31,8 @@ export interface Lead {
     location: string;
     generatedMessage?: string;
     followUpDate?: string;
+    searchQuery?: string;
+searchLocation?: string;
 }
 
 export interface ActivityLog {
