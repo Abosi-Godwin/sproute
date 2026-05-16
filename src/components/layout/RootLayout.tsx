@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { Outlet, Navigate } from "react-router";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
-import ScrollToTop from "./ScrollToTop";
 import OnboardingOverlay from "../onboarding/OnboardingOverlay";
+import ScrollToTop from "./ScrollToTop";
 import { useUIStore } from "../../lib/stores/useUIStore";
 import { useAuthStore } from "../../lib/stores/useAuthStore";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
@@ -16,6 +16,7 @@ export default function RootLayout() {
 
     useEffect(() => {
         if (user) {
+            // Background fetch — never blocks UI
             fetchLeads();
             fetchActivity();
         }
@@ -35,11 +36,15 @@ export default function RootLayout() {
 
     return (
         <div className="flex h-screen overflow-hidden bg-base-950">
+            <ScrollToTop />
             {!hasOnboarded && <OnboardingOverlay />}
             <div className="hidden md:block">
                 <Sidebar />
             </div>
-            <main id="main-content" className="flex-1 overflow-y-auto pb-16 md:pb-0">
+            <main
+                id="main-content"
+                className="flex-1 overflow-y-auto pb-16 md:pb-0"
+            >
                 <Outlet />
             </main>
             <BottomNav />
