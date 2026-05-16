@@ -1,27 +1,37 @@
-import { useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../lib/stores/useAuthStore';
 
-export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setUser, setSession, setIsLoading } = useAuthStore();
+import { useEffect } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuthStore } from "../../lib/stores/useAuthStore";
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
+export default function AuthProvider({
+    children
+}: {
+    children: React.ReactNode;
+}) {
+    const { setUser, setSession, setIsLoading } = useAuthStore();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            setIsLoading(false);
+        });
 
-    return () => subscription.unsubscribe();
-  }, []);
+        const {
+            data: { subscription }
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            setIsLoading(false);
 
-  return <>{children}</>;
+            if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+                const { fetchLeads, fetchActivity } = useLeadsStore.getState();
+                await fetchLeads();
+                await fetchActivity();
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, []);
+
+    return <>{children}</>;
 }

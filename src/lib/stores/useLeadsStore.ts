@@ -1,4 +1,4 @@
-import { create } from "zustand";
+ import { create } from "zustand";
 import { Lead, ActivityLog, LeadStatus } from "../../types";
 import { supabase } from "../supabase";
 import { useSettingsStore } from "./useSettingsStore";
@@ -15,6 +15,7 @@ interface LeadsStore {
     saveGeneratedMessage: (id: string, message: string) => Promise<void>;
     setFollowUpDate: (id: string, date: string) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
+    bulkDelete: (ids: string[]) => Promise<void>;
     logActivity: (
         entry: Omit<ActivityLog, "id" | "timestamp">
     ) => Promise<void>;
@@ -27,6 +28,15 @@ export const useLeadsStore = create<LeadsStore>((set, get) => ({
 
     fetchLeads: async () => {
         set({ isLoading: true });
+
+        const {
+            data: { session }
+        } = await supabase.auth.getSession();
+        if (!session) {
+            set({ isLoading: false });
+            return;
+        }
+
         const { data, error } = await supabase
             .from("leads")
             .select("*")
@@ -49,8 +59,9 @@ export const useLeadsStore = create<LeadsStore>((set, get) => ({
                 followUpDate: r.follow_up_date,
                 generatedMessage: r.generated_message,
                 savedAt: r.saved_at,
-                updatedAt: r.updated_at,searchQuery: r.search_query,
-searchLocation: r.search_location,
+                updatedAt: r.updated_at,
+                searchQuery: r.search_query,
+                searchLocation: r.search_location
             }));
             set({ leads, isLoading: false });
         } else {
@@ -59,6 +70,16 @@ searchLocation: r.search_location,
     },
 
     fetchActivity: async () => {
+        set({ isLoading: true });
+
+        const {
+            data: { session }
+        } = await supabase.auth.getSession();
+        if (!session) {
+            set({ isLoading: false });
+            return;
+        }
+
         const { data, error } = await supabase
             .from("activity")
             .select("*")
@@ -73,7 +94,9 @@ searchLocation: r.search_location,
                 message: r.message,
                 timestamp: r.timestamp
             }));
-            set({ activity });
+            set({ activity, isLoading: false });
+        } else {
+            set({ isLoading: false });
         }
     },
 
@@ -200,6 +223,19 @@ searchLocation: r.search_location,
         if (!error) {
             set(state => ({
                 leads: state.leads.filter(l => l.id !== id)
+            }));
+        }
+    },
+
+    bulkDelete: async ids => {
+        const { error } = await supabase
+            .from("leads")
+            .delete()
+            .in("id", ids);
+
+        if (!error) {
+            set(state => ({
+                leads: state.leads.filter(l => !ids.includes(l.id))
             }));
         }
     },
