@@ -62,7 +62,7 @@ export default function Settings() {
         followUpDays,
         setDefaultLocation,
         setOutreachTone,
-        setFollowUpDays
+        setFollowUpDays,setDailyGoal, dailyGoal
     } = useSettingsStore();
     const { leads, activity, fetchLeads, fetchActivity } = useLeadsStore();
     const { serviceDescription, setServiceDescription } = useSettingsStore();
@@ -253,6 +253,30 @@ export default function Settings() {
                                     )}
                                 >
                                     {day}d
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2 pt-4 border-t border-base-800">
+                        <p className="text-sm text-base-100">
+                            Daily Outreach Goal
+                        </p>
+                        <p className="text-xs text-base-500">
+                            Number of businesses to message per day.
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {[5, 10, 15, 20, 30, 50].map(goal => (
+                                <button
+                                    key={goal}
+                                    onClick={() => setDailyGoal(goal)}
+                                    className={clsx(
+                                        "text-xs px-3 py-1.5 rounded-lg transition-colors",
+                                        dailyGoal === goal
+                                            ? "bg-brand-500/10 text-brand-400"
+                                            : "bg-base-800 text-base-500 hover:text-base-300"
+                                    )}
+                                >
+                                    {goal}
                                 </button>
                             ))}
                         </div>
@@ -500,45 +524,51 @@ export default function Settings() {
             </div>
 
             {/* Account */}
-<div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
-    <SectionHeader icon={User} title="Account" />
-    
-    {/* Email + Sign out */}
-    <div className="flex items-center justify-between">
-        <div className="space-y-1">
-            <p className="text-sm font-medium text-base-100">{userEmail}</p>
-            <p className="text-xs text-base-500">Member since {memberSince}</p>
-        </div>
-        <button
-            onClick={signOut}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-xs font-medium shrink-0"
-        >
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-        </button>
-    </div>
+            <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
+                <SectionHeader icon={User} title="Account" />
 
-    {/* Your Service */}
-    <div className="border-t border-base-800 pt-4 space-y-2">
-        <p className="text-sm font-medium text-base-100">Your Service</p>
-        <p className="text-xs text-base-500">
-            Used to personalise your AI-generated outreach messages.
-        </p>
-        <input
-            type="text"
-            value={service}
-            onChange={(e) => setService(e.target.value)}
-            placeholder="e.g. Web development, Photography..."
-            className="w-full bg-base-800 border border-base-700 rounded-lg px-4 py-2.5 text-sm text-base-100 placeholder:text-base-500 focus:outline-none focus:border-brand-500 transition-colors"
-        />
-        <button
-            onClick={() => setServiceDescription(service)}
-            className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
-        >
-            Save Service
-        </button>
-    </div>
-</div>
+                {/* Email + Sign out */}
+                <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-base-100">
+                            {userEmail}
+                        </p>
+                        <p className="text-xs text-base-500">
+                            Member since {memberSince}
+                        </p>
+                    </div>
+                    <button
+                        onClick={signOut}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-xs font-medium shrink-0"
+                    >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Sign Out
+                    </button>
+                </div>
+
+                {/* Your Service */}
+                <div className="border-t border-base-800 pt-4 space-y-2">
+                    <p className="text-sm font-medium text-base-100">
+                        Your Service
+                    </p>
+                    <p className="text-xs text-base-500">
+                        Used to personalise your AI-generated outreach messages.
+                    </p>
+                    <input
+                        type="text"
+                        value={service}
+                        onChange={e => setService(e.target.value)}
+                        placeholder="e.g. Web development, Photography..."
+                        className="w-full bg-base-800 border border-base-700 rounded-lg px-4 py-2.5 text-sm text-base-100 placeholder:text-base-500 focus:outline-none focus:border-brand-500 transition-colors"
+                    />
+                    <button
+                        onClick={() => setServiceDescription(service)}
+                        className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+                    >
+                        Save Service
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

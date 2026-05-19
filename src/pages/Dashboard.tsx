@@ -5,6 +5,10 @@ import PipelineBar from '../components/dashboard/PipelineBar';
 import QuickSearch from '../components/dashboard/QuickSearch';
 import LeadRow from '../components/ui/LeadRow';
 import ActivityItem from '../components/ui/ActivityItem';
+import OutreachGoal from '../components/dashboard/OutreachGoal';
+
+// Add between StatsRow and PipelineBar
+
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -29,7 +33,8 @@ export default function Dashboard() {
 
       {/* Pipeline */}
       <PipelineBar leads={leads} />
-
+      {/* Outreach streak */}
+<OutreachGoal />
       {/* Bottom grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Leads */}

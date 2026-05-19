@@ -139,9 +139,9 @@ export const useLeadsStore = create<LeadsStore>()(
                     });
                 }
             },
-
+            /*
             updateStatus: async (id, status) => {
-                // Optimistic update first
+              
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id
@@ -173,8 +173,46 @@ export const useLeadsStore = create<LeadsStore>()(
                         message: `Marked ${lead.name} as ${status.replace(/_/g, " ")}`
                     });
                 }
-            },
+            },*/
 
+            updateStatus: async (id, status) => {
+                // Optimistic update first
+                set(state => ({
+                    leads: state.leads.map(l =>
+                        l.id === id
+                            ? {
+                                  ...l,
+                                  status,
+                                  updatedAt: new Date().toISOString()
+                              }
+                            : l
+                    )
+                }));
+
+                const { error } = await supabase
+                    .from("leads")
+                    .update({ status, updated_at: new Date().toISOString() })
+                    .eq("id", id);
+
+                if (error) {
+                    await get().fetchLeads();
+                    return;
+                }
+
+                // Record streak when marked as messaged
+                if (status === "messaged") {
+                    useSettingsStore.getState().recordOutreachActivity();
+                }
+
+                const lead = get().leads.find(l => l.id === id);
+                if (lead) {
+                    await get().logActivity({
+                        leadId: id,
+                        leadName: lead.name,
+                        message: `Marked ${lead.name} as ${status.replace(/_/g, " ")}`
+                    });
+                }
+            },
             updateNotes: async (id, notes) => {
                 // Optimistic update first
                 set(state => ({
@@ -292,7 +330,6 @@ export const useLeadsStore = create<LeadsStore>()(
                 });
 
                 if (error) {
-                  
                     set(state => ({
                         activity: state.activity.filter(a => a.id !== log.id)
                     }));

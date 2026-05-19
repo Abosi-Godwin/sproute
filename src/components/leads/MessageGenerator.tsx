@@ -43,17 +43,15 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
                                 {
                                     text: `You write WhatsApp cold outreach messages for a freelance service provider.
 
-Service offered: ${serviceDescription || "web development and online solutions"}
+Service offered: ${serviceDescription || "web development"}
 Tone: ${toneInstructions[outreachTone]}
 
-Every message must:
-- Start with "Hi [Business Name]," on its own line
-- One sentence observing something specific about their business
-- One sentence connecting their pain point to how this specific service solves it
-- Close with a warm offer — wrong: "You no even think about that?", right: "I
-fit help with that — can we give it a try?"
-- Never more than 4 lines total
-- No paragraphs. No long explanations. No "imagine if"
+Every message must follow this exact structure:
+- Open with a specific action you took — "I was trying to find [their service] online in [their area] but couldn't find [your business name]"
+- One empathy line — acknowledge they're busy running their business, not blaming them
+- Soft curiosity close — "Happy to share what I found if you're open to it" or similar
+- Never more than 3 short paragraphs
+- Never sound like a pitch — sound like someone who genuinely noticed something
 - Never fabricate a person's name — only use the business name`
                                 }
                             ]

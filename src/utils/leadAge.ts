@@ -1,7 +1,11 @@
+import { Lead, LeadStatus } from "../types";
+
 export type LeadAge = "fresh" | "warm" | "cold" | "frozen";
 
-export function getLeadAge(savedAt: string, status: string): LeadAge {
-    if (status !== "new") return "fresh";
+const AGING_STATUSES: LeadStatus[] = ["new", "messaged"];
+
+export function getLeadAge(savedAt: string, status: LeadStatus): LeadAge {
+    if (!AGING_STATUSES.includes(status)) return "fresh";
 
     const days = Math.floor(
         (Date.now() - new Date(savedAt).getTime()) / (1000 * 60 * 60 * 24)
@@ -17,8 +21,8 @@ export const ageConfig: Record<
     LeadAge,
     { label: string; color: string } | null
 > = {
-    fresh: null, // no badge
-    warm: null, // no badge
+    fresh: null,
+    warm: null,
     cold: { label: "Going cold", color: "text-yellow-400" },
     frozen: { label: "Cold lead", color: "text-blue-400" }
 };

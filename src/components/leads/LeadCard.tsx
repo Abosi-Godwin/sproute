@@ -9,12 +9,13 @@ import {
     MoreVertical,
     CheckSquare,
     Loader2,
-    MapPinned
+    MapPinned,
+    ShieldAlert,
+    TrendingUp
 } from "lucide-react";
-
 import { clsx } from "clsx";
 import { Lead, LeadStatus } from "../../types";
-
+import { scoreLead, getScoreColor, getScoreBg } from "../../utils/leadScore";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { getLeadAge, ageConfig } from "../../utils/leadAge";
 
@@ -49,11 +50,12 @@ export default function LeadCard({
 }: LeadCardProps) {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
-const [isDeleting, setIsDeleting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const { updateStatus, deleteLead } = useLeadsStore();
 
     const isSelected = selected.includes(lead.id);
+    const score = scoreLead(lead);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -71,12 +73,15 @@ const [isDeleting, setIsDeleting] = useState(false);
 
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + " " + lead.address)}`;
 
-// Update the delete handler
-const handleDelete = async () => {
-    setIsDeleting(true);
-    await deleteLead(lead.id);
-    setIsDeleting(false);
-};
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        await deleteLead(lead.id);
+        setIsDeleting(false);
+    };
+
+    const age = getLeadAge(lead.savedAt, lead.status);
+    const ageConf = ageConfig[age];
+
     return (
         <div
             className={clsx(
@@ -88,75 +93,92 @@ const handleDelete = async () => {
         >
             {/* Header */}
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                     <p className="font-display font-semibold text-base-50 leading-snug truncate">
                         {lead.name}
                     </p>
                     <p className="text-xs text-base-500 mt-0.5">
                         {lead.category}
                     </p>
-                    {(() => {
-                        const age = getLeadAge(lead.savedAt, lead.status);
-                        const config = ageConfig[age];
-                        return config ? (
-                            <span
-                                className={`text-xs font-medium ${config.color}`}
-                            >
-                                ● {config.label}
+                    {/* badges */}
+                  
+                    <div className="flex flex-col gap-0.5 mt-1">
+                        {ageConf && (
+                            <span className={`text-xs font-medium ${ageConf.color}`}>
+                                ● {ageConf.label}
                             </span>
-                        ) : null;
-                    })()}
-                    {lead.followUpDate &&
-                        new Date(lead.followUpDate) < new Date() && (
+                        )}
+                        {lead.unclaimedListing && (
+                            <span className="text-xs text-yellow-400 font-medium flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3" />
+                                Unclaimed
+                            </span>
+                        )}
+                        {lead.followUpDate && new Date(lead.followUpDate) < new Date() && (
                             <span className="text-xs text-orange-400 font-medium">
                                 ⏰ Follow-up overdue
                             </span>
                         )}
+                    </div>
+                
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                    {lead.rating && (
-                        <div className="flex items-center gap-1">
-                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-xs text-base-300">
-                                {lead.rating}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Three-dot menu */}
-                    <div className="relative" ref={menuRef}>
-                        <button
-                            onClick={() => setMenuOpen(!menuOpen)}
-                            className="p-1 rounded-lg text-base-500 hover:text-base-300 hover:bg-base-800 transition-colors"
-                        >
-                            <MoreVertical className="w-4 h-4" />
-                        </button>
-
-                        {menuOpen && (
-                            <div className="absolute right-0 top-7 z-20 w-48 bg-base-800 border border-base-700 rounded-xl shadow-lg overflow-hidden">
-                                <button
-                                    onClick={() => {
-                                        toggleSelect(lead.id);
-                                        setMenuOpen(false);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
-                                >
-                                    <CheckSquare className="w-3.5 h-3.5" />
-                                    {isSelected ? "Deselect" : "Select"}
-                                </button>
-                                <a
-                                    href={googleMapsUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => setMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
-                                >
-                                    <MapPinned className="w-3.5 h-3.5" />
-                                    View on Google Maps
-                                </a>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                    {/* Rating + Score + Menu all top-anchored */}
+                    <div className="flex items-center gap-1.5">
+                        {lead.rating && (
+                            <div className="flex items-center gap-1">
+                                <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                                <span className="text-xs text-base-300">
+                                    {lead.rating}
+                                </span>
                             </div>
                         )}
+                        <div
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg ${getScoreBg(score)}`}
+                        >
+                            <TrendingUp
+                                className={`w-3 h-3 ${getScoreColor(score)}`}
+                            />
+                            <span
+                                className={`text-xs font-semibold ${getScoreColor(score)}`}
+                            >
+                                {score}
+                            </span>
+                        </div>
+                        {/* Menu inline with rating and score */}
+                        <div className="relative" ref={menuRef}>
+                            <button
+                                onClick={() => setMenuOpen(!menuOpen)}
+                                className="p-1 rounded-lg text-base-500 hover:text-base-300 hover:bg-base-800 transition-colors"
+                            >
+                                <MoreVertical className="w-4 h-4" />
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-7 z-20 w-48 bg-base-800 border border-base-700 rounded-xl shadow-lg overflow-hidden">
+                                    <button
+                                        onClick={() => {
+                                            toggleSelect(lead.id);
+                                            setMenuOpen(false);
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
+                                    >
+                                        <CheckSquare className="w-3.5 h-3.5" />
+                                        {isSelected ? "Deselect" : "Select"}
+                                    </button>
+                                    <a
+                                        href={googleMapsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
+                                    >
+                                        <MapPinned className="w-3.5 h-3.5" />
+                                        View on Google Maps
+                                    </a>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -186,7 +208,6 @@ const handleDelete = async () => {
                         {lead.notes}
                     </p>
                 )}
-
                 {lead.searchQuery && (
                     <p className="text-xs text-base-600 truncate">
                         Found via: {lead.searchQuery} · {lead.searchLocation}
@@ -262,3 +283,86 @@ const handleDelete = async () => {
         </div>
     );
 }
+
+/*
+<div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                    <p className="font-display font-semibold text-base-50 leading-snug truncate">
+                        {lead.name}
+                    </p>
+                    <p className="text-xs text-base-500 mt-0.5">{lead.category}</p>
+
+                    / Badges /
+                    <div className="flex flex-col gap-0.5 mt-1">
+                        {ageConf && (
+                            <span className={`text-xs font-medium ${ageConf.color}`}>
+                                ● {ageConf.label}
+                            </span>
+                        )}
+                        {lead.unclaimedListing && (
+                            <span className="text-xs text-yellow-400 font-medium flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3" />
+                                Unclaimed
+                            </span>
+                        )}
+                        {lead.followUpDate && new Date(lead.followUpDate) < new Date() && (
+                            <span className="text-xs text-orange-400 font-medium">
+                                ⏰ Follow-up overdue
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                * Right side — score, rating, menu stacked *
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    * Score + Rating row *}
+                    <div className="flex items-center gap-2">
+                        {lead.rating && (
+                            <div className="flex items-center gap-1">
+                                <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                                <span className="text-xs text-base-300">{lead.rating}</span>
+                            </div>
+                        )}
+                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg ${getScoreBg(score)}`}>
+                            <TrendingUp className={`w-3 h-3 ${getScoreColor(score)}`} />
+                            <span className={`text-xs font-semibold ${getScoreColor(score)}`}>{score}</span>
+                        </div>
+                    </div>
+
+                    * Three-dot menu *
+                    <div className="relative" ref={menuRef}>
+                        <button
+                            onClick={() => setMenuOpen(!menuOpen)}
+                            className="p-1 rounded-lg text-base-500 hover:text-base-300 hover:bg-base-800 transition-colors"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {menuOpen && (
+                            <div className="absolute right-0 top-7 z-20 w-48 bg-base-800 border border-base-700 rounded-xl shadow-lg overflow-hidden">
+                                <button
+                                    onClick={() => { toggleSelect(lead.id); setMenuOpen(false); }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
+                                >
+                                    <CheckSquare className="w-3.5 h-3.5" />
+                                    {isSelected ? "Deselect" : "Select"}
+                                </button>
+                                <a
+                                    href={googleMapsUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
+                                >
+                                    <MapPinned className="w-3.5 h-3.5" />
+                                    View on Google Maps
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+
+
+*/

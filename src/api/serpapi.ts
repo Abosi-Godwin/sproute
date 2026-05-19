@@ -45,6 +45,7 @@ export async function fetchPlaces(
             website: r.website ?? undefined,
             rating: r.rating ?? undefined,
             reviews: r.reviews ?? undefined,
+            unclaimedListing: r.unclaimed_listing ?? false,
             coordinates: r.gps_coordinates
                 ? {
                       latitude: r.gps_coordinates.latitude,
@@ -54,7 +55,6 @@ export async function fetchPlaces(
         })
     );
   
-
     return {
         results,
         hasNextPage: !!data.serpapi_pagination?.next

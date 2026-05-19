@@ -14,7 +14,7 @@ export default function LeadsGroup({
     label,
     leads,
     selected,
-    toggleSelect,
+    toggleSelect
 }: LeadsGroupProps) {
     return (
         <div className="space-y-3">
@@ -32,7 +32,6 @@ export default function LeadsGroup({
         </div>
     );
 }
-
 function LeadsGrid({
     leads,
     selected,
@@ -55,6 +54,7 @@ function LeadsGrid({
         estimateSize: () => 340,
         overscan: 4,
         scrollMargin: containerRef.current?.offsetTop ?? 0,
+        measureElement: (el) => el.getBoundingClientRect().height,
     });
 
     return (
@@ -69,12 +69,13 @@ function LeadsGrid({
                 {virtualizer.getVirtualItems().map((virtualItem) => (
                     <div
                         key={virtualItem.key}
+                        data-index={virtualItem.index}
+                        ref={virtualizer.measureElement}
                         style={{
                             position: "absolute",
                             top: 0,
                             left: 0,
                             width: "100%",
-                            height: `${virtualItem.size}px`,
                             transform: `translateY(${
                                 virtualItem.start -
                                 virtualizer.options.scrollMargin

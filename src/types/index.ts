@@ -12,7 +12,13 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
     limit: number;
 }
 
-export type LeadStatus = 'new' | 'messaged' | 'replied' | 'converted' | 'dead' | 'not_on_whatsapp';
+export type LeadStatus =
+    | "new"
+    | "messaged"
+    | "replied"
+    | "converted"
+    | "dead"
+    | "not_on_whatsapp";
 
 export interface Lead {
     id: string;
@@ -32,7 +38,8 @@ export interface Lead {
     generatedMessage?: string;
     followUpDate?: string;
     searchQuery?: string;
-searchLocation?: string;
+    searchLocation?: string;
+    unclaimedListing?: boolean;
 }
 
 export interface ActivityLog {
@@ -52,6 +59,7 @@ export interface SearchResult {
     website?: string;
     rating?: number;
     reviews?: number;
+    unclaimedListing?: boolean;
     coordinates?: { latitude: number; longitude: number };
 }
 

@@ -6,6 +6,7 @@ import LeadNotes from "../components/leads/LeadNotes";
 import LeadActivity from "../components/leads/LeadActivity";
 import MessageGenerator from "../components/leads/MessageGenerator";
 import ReplyTemplates from "../components/leads/ReplyTemplates";
+import ClosingGuide from "../components/leads/ClosingGuide";
 import { useSettingsStore } from "../lib/stores/useSettingsStore";
 
 export default function LeadDetail() {
@@ -72,6 +73,7 @@ export default function LeadDetail() {
                             }
                         />
                     )}
+                    <ClosingGuide />
                     <LeadActivity leadId={lead.id} />
                 </div>
             </div>
