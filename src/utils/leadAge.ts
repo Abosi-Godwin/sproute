@@ -1,8 +1,8 @@
 import { Lead, LeadStatus } from "../types";
 
 export type LeadAge = "fresh" | "warm" | "cold" | "frozen";
-
-const AGING_STATUSES: LeadStatus[] = ["new", "messaged"];
+ 
+const AGING_STATUSES: LeadStatus[] = ["new"];
 
 export function getLeadAge(savedAt: string, status: LeadStatus): LeadAge {
     if (!AGING_STATUSES.includes(status)) return "fresh";

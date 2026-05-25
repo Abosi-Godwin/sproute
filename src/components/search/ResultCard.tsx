@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { MapPin, Phone, Globe, Star, ShieldAlert, TrendingUp } from "lucide-react";
+import {
+    MapPin, Phone, Globe, Star,
+    ShieldAlert, TrendingUp, AlarmClock
+} from "lucide-react";
 import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { scoreSearchResult, getScoreColor, getScoreBg } from "../../utils/leadScore";
@@ -36,35 +39,50 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
             location: "",
             searchQuery,
             searchLocation,
+            unclaimedListing: result.unclaimedListing,
         });
         setIsSaving(false);
     };
 
     return (
-        <div className="bg-base-900 border border-base-800 rounded-xl p-5 flex flex-col gap-3 hover:border-base-700 transition-colors">
+        <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3 hover:border-base-700 transition-colors">
+
             {/* Header */}
             <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                    <p className="font-display font-semibold text-base-50 leading-snug">
+                <div className="min-w-0 flex-1">
+                    <p className="font-display font-semibold text-base-50 leading-snug truncate">
                         {result.name}
                     </p>
-                    <p className="text-xs text-base-500 mt-0.5">{result.category}</p>
-                </div>
-
-                {/* Rating + Score */}
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {result.rating && (
-                        <div className="flex items-center gap-1">
-                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-xs text-base-300">{result.rating}</span>
-                        </div>
-                    )}
-                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg ${getScoreBg(score)}`}>
-                        <TrendingUp className={`w-3 h-3 ${getScoreColor(score)}`} />
-                        <span className={`text-xs font-semibold ${getScoreColor(score)}`}>{score}</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-base-500">{result.category}</span>
+                        {result.rating && (
+                            <>
+                                <span className="text-base-700 text-xs">·</span>
+                                <div className="flex items-center gap-1">
+                                    <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                                    <span className="text-xs text-base-400">{result.rating}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
+
+                {/* Score */}
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0 ${getScoreBg(score)}`}>
+                    <TrendingUp className={`w-3 h-3 ${getScoreColor(score)}`} />
+                    <span className={`text-xs font-semibold ${getScoreColor(score)}`}>{score}</span>
+                </div>
             </div>
+
+            {/* Badge strip */}
+            {result.unclaimedListing && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-yellow-400 bg-yellow-500/10">
+                        <ShieldAlert className="w-3 h-3" />
+                        Unclaimed
+                    </span>
+                </div>
+            )}
 
             {/* Details */}
             <div className="space-y-1.5">
@@ -82,15 +100,9 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                     <Globe className="w-3.5 h-3.5 shrink-0 text-base-400" />
                     {result.website
                         ? <span className="text-brand-400">Has website</span>
-                        : <span className="text-red-400">No website</span>
+                        : <span className="text-blue-400">No website — opportunity</span>
                     }
                 </div>
-                {result.unclaimedListing && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-yellow-400" />
-                        <span className="text-yellow-400">Unclaimed listing</span>
-                    </div>
-                )}
             </div>
 
             {/* Action */}
