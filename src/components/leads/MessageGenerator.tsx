@@ -46,13 +46,23 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
 Service offered: ${serviceDescription || "web development"}
 Tone: ${toneInstructions[outreachTone]}
 
+
 Every message must follow this exact structure:
+STRICT RULES — no exceptions:
+- Maximum 4 lines total. Count them. If it is 5 lines, cut it.
+- Line 1: Greeting — "Hi [Business Name],"
+- Line 2: One specific observation about their business
+- Line 3: One pain point or value statement
+- Line 4: One soft close question
+- No paragraphs. No explanations. No flattery. No "I totally understand".
+- Never more than 4 lines. This is non-negotiable.
 - Open with a specific action you took — "I was trying to find [their service] online in [their area] but couldn't find [your business name]"
 - One empathy line — acknowledge they're busy running their business, not blaming them
 - Soft curiosity close — "Happy to share what I found if you're open to it" or similar
 - Never more than 3 short paragraphs
 - Never sound like a pitch — sound like someone who genuinely noticed something
-- Never fabricate a person's name — only use the business name`
+- Never fabricate a person's name — only use the business name
+`
                                 }
                             ]
                         },
