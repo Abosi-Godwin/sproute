@@ -20,17 +20,19 @@ export async function fetchPlaces(
     ll: string,
     start = 0
 ): Promise<FetchPlacesResult> {
-    const params = new URLSearchParams({
-        engine: "google_maps",
-        type: "search",
-        q: query,
-        ll,
-        hl: "en",
-        start: String(start),
-        api_key: API_KEY
-    });
+  // Remove the api_key from client params
+const params = new URLSearchParams({
+  engine: 'google_maps',
+  type: 'search',
+  q: query,
+  ll,
+  hl: 'en',
+  start: String(start),
+});
 
-    const res = await fetch(`/api/serpapi/search?${params}`);
+// Point to Vercel function
+const res = await fetch(`/api/serpapi?${params}`);
+ 
     const data = await res.json();
 
     if (!res.ok) throw new Error(`SerpAPI error: ${res.status}`);

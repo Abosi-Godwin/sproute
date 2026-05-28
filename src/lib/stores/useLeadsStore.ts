@@ -139,67 +139,32 @@ export const useLeadsStore = create<LeadsStore>()(
                     });
                 }
             },
-            /*
+           
             updateStatus: async (id, status) => {
+                
+                set(state => ({
+                    leads: state.leads.map(l =>
+                        l.id === id
+                            ? {
+                                  ...l,
+                                  status,
+                                  updatedAt: new Date().toISOString()
+                              }
+                            : l
+                    )
+                }));
+
+                const { error } = await supabase
+                    .from("leads")
+                    .update({ status, updated_at: new Date().toISOString() })
+                    .eq("id", id);
+
+                if (error) {
+                    await get().fetchLeads();
+                    return;
+                }
+
               
-                set(state => ({
-                    leads: state.leads.map(l =>
-                        l.id === id
-                            ? {
-                                  ...l,
-                                  status,
-                                  updatedAt: new Date().toISOString()
-                              }
-                            : l
-                    )
-                }));
-
-                const { error } = await supabase
-                    .from("leads")
-                    .update({ status, updated_at: new Date().toISOString() })
-                    .eq("id", id);
-
-                if (error) {
-                    // Revert on failure
-                    await get().fetchLeads();
-                    return;
-                }
-
-                const lead = get().leads.find(l => l.id === id);
-                if (lead) {
-                    await get().logActivity({
-                        leadId: id,
-                        leadName: lead.name,
-                        message: `Marked ${lead.name} as ${status.replace(/_/g, " ")}`
-                    });
-                }
-            },*/
-
-            updateStatus: async (id, status) => {
-                // Optimistic update first
-                set(state => ({
-                    leads: state.leads.map(l =>
-                        l.id === id
-                            ? {
-                                  ...l,
-                                  status,
-                                  updatedAt: new Date().toISOString()
-                              }
-                            : l
-                    )
-                }));
-
-                const { error } = await supabase
-                    .from("leads")
-                    .update({ status, updated_at: new Date().toISOString() })
-                    .eq("id", id);
-
-                if (error) {
-                    await get().fetchLeads();
-                    return;
-                }
-
-                // Record streak when marked as messaged
                 if (status === "messaged") {
                     useSettingsStore.getState().recordOutreachActivity();
                 }
@@ -238,7 +203,7 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             saveGeneratedMessage: async (id, message) => {
-                // Optimistic update first
+                
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id ? { ...l, generatedMessage: message } : l
@@ -274,7 +239,7 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             deleteLead: async id => {
-                // Optimistic update first
+                
                 set(state => ({
                     leads: state.leads.filter(l => l.id !== id)
                 }));

@@ -4,10 +4,10 @@ import { getTodayMessagedCount } from "../../utils/todayStats";
 import { Flame } from "lucide-react";
 
 export default function OutreachGoal() {
-    const { leads } = useLeadsStore();
+    const { leads, activity } = useLeadsStore();
     const { dailyGoal, currentStreak } = useSettingsStore();
 
-    const today = getTodayMessagedCount(leads);
+    const today = getTodayMessagedCount(activity);
     const percentage = Math.min((today / dailyGoal) * 100, 100);
     const completed = today >= dailyGoal;
 

@@ -1,7 +1,7 @@
 import { Globe, Zap, TrendingUp, MessageCircle, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
-import { Lead, LeadStatus } from "../../types";
+import { Lead, LeadStatus, ActivityLog } from "../../types";
 import { getTodayMessagedCount } from "../../utils/todayStats";
 import { clsx } from "clsx";
 
@@ -46,8 +46,11 @@ function StatCard({
         </motion.button>
     );
 }
-
-export default function StatsRow({ leads }: { leads: Lead[] }) {
+interface StatsRowProps {
+    leads: Lead[];
+    activity: ActivityLog[];
+}
+export default function StatsRow({ leads, activity }: StatsRowProps) {
     const navigate = useNavigate();
 
     const total = leads.length;
@@ -59,7 +62,7 @@ export default function StatsRow({ leads }: { leads: Lead[] }) {
     const converted = leads.filter(l => l.status === "converted").length;
     const conversionRate =
         total > 0 ? Math.round((converted / total) * 100) : 0;
-    const todayMessaged = getTodayMessagedCount(leads);
+    const todayMessaged = getTodayMessagedCount(activity);
 
     const stats = [
         {
@@ -103,29 +106,33 @@ export default function StatsRow({ leads }: { leads: Lead[] }) {
     ];
 
     return (
-  <div className="space-y-3">
-    {/* Top 4 stats — 2 column grid */}
-    <div className="grid grid-cols-2 gap-3">
-      {stats.slice(0, 4).map((stat) => (
-        <StatCard key={stat.label} {...stat} />
-      ))}
-    </div>
+        <div className="space-y-3">
+            {/* Top 4 stats — 2 column grid */}
+            <div className="grid grid-cols-2 gap-3">
+                {stats.slice(0, 4).map(stat => (
+                    <StatCard key={stat.label} {...stat} />
+                ))}
+            </div>
 
-    {/* Today's Outreach — full width */}
-    <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex items-center justify-between hover:border-base-700 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-          <Send className="w-4 h-4 text-purple-400" />
+            {/* Today's Outreach — full width */}
+            <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex items-center justify-between hover:border-base-700 transition-colors">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                        <Send className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div>
+                        <p className="text-xs text-base-400">
+                            Today's Outreach
+                        </p>
+                        <p className="text-xs text-base-600">
+                            Resets at midnight
+                        </p>
+                    </div>
+                </div>
+                <p className="text-2xl font-display font-bold text-purple-400">
+                    {todayMessaged}
+                </p>
+            </div>
         </div>
-        <div>
-          <p className="text-xs text-base-400">Today's Outreach</p>
-          <p className="text-xs text-base-600">Resets at midnight</p>
-        </div>
-      </div>
-      <p className="text-2xl font-display font-bold text-purple-400">
-        {todayMessaged}
-      </p>
-    </div>
-  </div>
-);
+    );
 }
