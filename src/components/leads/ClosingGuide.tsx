@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  BookOpen, ChevronDown, ChevronUp,
+  MessageSquare, Shield, DoorOpen,
+  Search, DollarSign, Phone, ThumbsUp
+} from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface GuideSection {
   id: string;
   title: string;
-  emoji: string;
+  icon: React.ElementType;
   content: { heading: string; body: string }[];
 }
 
@@ -13,7 +17,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'reach-out',
     title: 'How to Reach Out',
-    emoji: '📨',
+    icon: MessageSquare,
     content: [
       {
         heading: 'Lead with observation, not pitch',
@@ -32,7 +36,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'professional',
     title: 'Stay Professional',
-    emoji: '🧠',
+    icon: Shield,
     content: [
       {
         heading: 'Never over-promise',
@@ -55,7 +59,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'rejection',
     title: 'Handling Rejection',
-    emoji: '🚪',
+    icon: DoorOpen,
     content: [
       {
         heading: 'No is not personal',
@@ -78,7 +82,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'dig-deeper',
     title: 'Getting Them to Open Up',
-    emoji: '🔍',
+    icon: Search,
     content: [
       {
         heading: 'Ask about their business, not their website',
@@ -101,7 +105,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'price',
     title: 'The Price Conversation',
-    emoji: '💰',
+    icon: DollarSign,
     content: [
       {
         heading: 'Never quote without scope',
@@ -124,7 +128,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'call',
     title: 'Getting Them on a Call',
-    emoji: '📞',
+    icon: Phone,
     content: [
       {
         heading: 'Suggest a specific time',
@@ -143,7 +147,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'interested',
     title: 'When They Say Yes',
-    emoji: '🎯',
+    icon: ThumbsUp,
     content: [
       {
         heading: 'Do not oversell after yes',
@@ -167,6 +171,7 @@ const GUIDE_SECTIONS: GuideSection[] = [
 
 function Section({ section }: { section: GuideSection }) {
   const [open, setOpen] = useState(false);
+  const Icon = section.icon;
 
   return (
     <div className="border border-base-800 rounded-xl overflow-hidden">
@@ -175,7 +180,7 @@ function Section({ section }: { section: GuideSection }) {
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-base-800 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">{section.emoji}</span>
+          <Icon className="w-4 h-4 text-brand-400" />
           <p className="text-sm font-medium text-base-100">{section.title}</p>
         </div>
         {open
