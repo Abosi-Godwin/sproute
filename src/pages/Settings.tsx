@@ -283,7 +283,7 @@ export default function Settings() {
                     </div>
                 </div>
             </div>
-
+ 
             {/* Outreach Tone */}
             <div className="bg-base-900 border border-base-800 rounded-xl p-5">
                 <SectionHeader icon={MessageSquare} title="Outreach Tone" />

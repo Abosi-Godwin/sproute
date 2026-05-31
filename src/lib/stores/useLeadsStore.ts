@@ -41,6 +41,7 @@ export const useLeadsStore = create<LeadsStore>()(
                     .order("saved_at", { ascending: false });
 
                 if (!error && data) {
+                
                     const leads: Lead[] = data.map(r => ({
                         id: r.id,
                         name: r.name,
@@ -125,7 +126,16 @@ export const useLeadsStore = create<LeadsStore>()(
                     saved_at: lead.savedAt,
                     updated_at: lead.updatedAt,
                     search_query: lead.searchQuery ?? null,
-                    search_location: lead.searchLocation ?? null
+                    search_location: lead.searchLocation ?? null,
+                    //ask claude about this, should it be here or message generation component
+                    painPoints: {
+                        hasWebsite: false,
+                        weakRating: true,
+                        fewReviews: true,
+                        unclaimedBusiness: true,
+                        missingInstagram: true,
+                        outdatedBranding: false
+                    }
                 });
 
                 if (!error) {
@@ -139,9 +149,8 @@ export const useLeadsStore = create<LeadsStore>()(
                     });
                 }
             },
-           
+
             updateStatus: async (id, status) => {
-                
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id
@@ -164,7 +173,6 @@ export const useLeadsStore = create<LeadsStore>()(
                     return;
                 }
 
-              
                 if (status === "messaged") {
                     useSettingsStore.getState().recordOutreachActivity();
                 }
@@ -203,7 +211,6 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             saveGeneratedMessage: async (id, message) => {
-                
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id ? { ...l, generatedMessage: message } : l
@@ -239,7 +246,6 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             deleteLead: async id => {
-                
                 set(state => ({
                     leads: state.leads.filter(l => l.id !== id)
                 }));

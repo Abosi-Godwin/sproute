@@ -1,11 +1,11 @@
-import Navbar from './Navbar.tsx'
+import Navbar from "./Navbar.tsx";
 
 const Header = () => {
-  return (
-    <div>
-      <Navbar />
-    </div>
-  )
-}
+    return (
+        <>
+            <Navbar />
+        </>
+    );
+};
 
-export default Header
+export default Header;

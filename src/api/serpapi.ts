@@ -20,7 +20,7 @@ export async function fetchPlaces(
     ll: string,
     start = 0
 ): Promise<FetchPlacesResult> {
-  // Remove the api_key from client params
+   
 const params = new URLSearchParams({
   engine: 'google_maps',
   type: 'search',
@@ -30,7 +30,7 @@ const params = new URLSearchParams({
   start: String(start),
 });
 
-// Point to Vercel function
+ 
 const res = await fetch(`/api/serpapi?${params}`);
  
     const data = await res.json();
