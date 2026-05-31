@@ -17,6 +17,7 @@
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-hot-toast": "^2.6.0",
     "react-router": "latest",
     "serpapi": "^2.2.1",
     "tailwind-merge": "latest",

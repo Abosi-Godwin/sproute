@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, Navigate } from "react-router";
+import toast from 'react-hot-toast';
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import OnboardingOverlay from "../onboarding/OnboardingOverlay";
@@ -21,6 +22,21 @@ export default function RootLayout() {
         }
     }, [user]);
 
+
+useEffect(() => {
+    const handleOffline = () => toast.error('You are offline', { duration: Infinity, id: 'offline' });
+    const handleOnline = () => {
+        toast.dismiss('offline');
+        toast.success('Back online');
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+        window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('online', handleOnline);
+    };
+}, []);
     if (isLoading) {
         return (
             <div className="min-h-screen bg-base-950 flex items-center justify-center">

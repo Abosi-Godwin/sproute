@@ -3,12 +3,11 @@ import {
     Sparkles, RefreshCw, Copy, Check,
     Loader2, MessageCircle
 } from "lucide-react";
-import { Lead } from "../../types";
+import { Lead, MessageAngle } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { clsx } from "clsx";
-
-type MessageAngle = 'curiosity' | 'friendly' | 'direct';
+import toast from "react-hot-toast";
 
 interface GeneratedMessage {
     id: string;
@@ -22,11 +21,32 @@ const angleConfig: Record<MessageAngle, { label: string; color: string; bg: stri
     direct: { label: 'Direct', color: 'text-blue-400', bg: 'bg-blue-500/10' },
 };
 
+// Parse persisted messages from lead
+function parsePersistedMessages(raw?: string): GeneratedMessage[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed.curiosity && parsed.friendly && parsed.direct) {
+            return [
+                { id: 'curiosity', angle: 'curiosity', text: parsed.curiosity },
+                { id: 'friendly', angle: 'friendly', text: parsed.friendly },
+                { id: 'direct', angle: 'direct', text: parsed.direct },
+            ];
+        }
+    } catch {
+        // Legacy plain string — show as curiosity only
+        if (raw) return [{ id: 'curiosity', angle: 'curiosity', text: raw }];
+    }
+    return [];
+}
+
 export default function MessageGenerator({ lead }: { lead: Lead }) {
-    const { logActivity, saveGeneratedMessage } = useLeadsStore();
+    const { logActivity, saveGeneratedMessage, setSelectedMessageAngle } = useLeadsStore();
     const { outreachTone, serviceDescription } = useSettingsStore();
 
-    const [messages, setMessages] = useState<GeneratedMessage[]>([]);
+    const [messages, setMessages] = useState<GeneratedMessage[]>(
+        () => parsePersistedMessages(lead.generatedMessage)
+    );
     const [isLoading, setIsLoading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [error, setError] = useState("");
@@ -114,50 +134,90 @@ Generate 3 outreach message variations.`
 
             setMessages(generated);
 
-            // Save the curiosity variant as the default generated message
-            saveGeneratedMessage(lead.id, parsed.curiosity);
+            // Save all 3 as JSON for persistence
+            saveGeneratedMessage(lead.id, JSON.stringify(parsed));
+
             logActivity({
                 leadId: lead.id,
                 leadName: lead.name,
                 message: `Generated 3 message variations for ${lead.name}`,
             });
+            toast.success('3 variations generated');
+
         } catch (err: any) {
-            setError(err.message ?? "Failed to generate messages.");
+            const message = err.message ?? '';
+            if (message.includes('429') || message.toLowerCase().includes('quota')) {
+                setError('Daily AI limit reached — try again tomorrow');
+                toast.error('AI quota reached');
+            } else if (message.includes('403') || message.toLowerCase().includes('api key')) {
+                setError('API key error — contact support');
+                toast.error('AI configuration error');
+            } else if (message.includes('JSON') || message.includes('parse')) {
+                setError('AI returned unexpected format — try again');
+                toast.error('Generation failed — try again');
+            } else {
+                setError('Failed to generate — check your connection');
+                toast.error('Generation failed');
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
-    const copy = async (text: string, id: string) => {
+    const copy = async (text: string, angle: MessageAngle) => {
         try {
             await navigator.clipboard.writeText(text);
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
         } catch {
-            // fallback for older browsers
             const el = document.createElement('textarea');
             el.value = text;
             document.body.appendChild(el);
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
         }
+        setCopiedId(angle);
+        setTimeout(() => setCopiedId(null), 2000);
+        toast.success('Copied to clipboard');
+
+        // Track which angle was used
+        setSelectedMessageAngle(lead.id, angle);
+        logActivity({
+            leadId: lead.id,
+            leadName: lead.name,
+            message: `Copied ${angle} message for ${lead.name}`,
+        });
     };
 
-    const openWhatsApp = (text: string) => {
+    const openWhatsApp = (text: string, angle: MessageAngle) => {
         if (!lead.phone) return;
         const phone = lead.phone.replace(/\D/g, "");
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+
+        // Track which angle was sent
+        setSelectedMessageAngle(lead.id, angle);
+        logActivity({
+            leadId: lead.id,
+            leadName: lead.name,
+            message: `Sent ${angle} message to ${lead.name} via WhatsApp`,
+        });
     };
 
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="font-display font-semibold text-base-100">
-                    Message Generator
-                </h3>
+                <div className="space-y-0.5">
+                    <h3 className="font-display font-semibold text-base-100">
+                        Message Generator
+                    </h3>
+                    {lead.selectedMessageAngle && (
+                        <p className="text-xs text-base-500">
+                            Last used:{" "}
+                            <span className={angleConfig[lead.selectedMessageAngle].color}>
+                                {angleConfig[lead.selectedMessageAngle].label}
+                            </span>
+                        </p>
+                    )}
+                </div>
                 <button
                     onClick={generate}
                     disabled={isLoading}
@@ -173,9 +233,7 @@ Generate 3 outreach message variations.`
                 </button>
             </div>
 
-            {error && (
-                <p className="text-xs text-red-400">{error}</p>
-            )}
+            {error && <p className="text-xs text-red-400">{error}</p>}
 
             {isLoading && (
                 <div className="flex items-center justify-center py-6 gap-2">
@@ -188,28 +246,38 @@ Generate 3 outreach message variations.`
                 <div className="space-y-3">
                     {messages.map((msg) => {
                         const config = angleConfig[msg.angle];
+                        const isLastUsed = lead.selectedMessageAngle === msg.angle;
                         return (
                             <div
                                 key={msg.id}
-                                className="border border-base-800 rounded-xl p-4 space-y-3"
+                                className={clsx(
+                                    'border rounded-xl p-4 space-y-3 transition-colors',
+                                    isLastUsed
+                                        ? 'border-brand-500/30 bg-brand-500/5'
+                                        : 'border-base-800'
+                                )}
                             >
-                                {/* Angle badge */}
-                                <span className={clsx(
-                                    'inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full',
-                                    config.bg, config.color
-                                )}>
-                                    {config.label}
-                                </span>
+                                <div className="flex items-center justify-between">
+                                    <span className={clsx(
+                                        'inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full',
+                                        config.bg, config.color
+                                    )}>
+                                        {config.label}
+                                    </span>
+                                    {isLastUsed && (
+                                        <span className="text-xs text-base-500">
+                                            Last used
+                                        </span>
+                                    )}
+                                </div>
 
-                                {/* Message */}
                                 <p className="text-sm text-base-200 leading-relaxed whitespace-pre-wrap">
                                     {msg.text}
                                 </p>
 
-                                {/* Actions */}
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => copy(msg.text, msg.id)}
+                                        onClick={() => copy(msg.text, msg.angle)}
                                         className="flex items-center gap-1.5 flex-1 justify-center text-xs font-medium px-3 py-2 rounded-lg bg-base-800 text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
                                     >
                                         {copiedId === msg.id
@@ -219,7 +287,7 @@ Generate 3 outreach message variations.`
                                     </button>
                                     {lead.phone && (
                                         <button
-                                            onClick={() => openWhatsApp(msg.text)}
+                                            onClick={() => openWhatsApp(msg.text, msg.angle)}
                                             className="flex items-center gap-1.5 flex-1 justify-center text-xs font-medium px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
                                         >
                                             <MessageCircle className="w-3.5 h-3.5" />

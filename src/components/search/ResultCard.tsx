@@ -1,11 +1,16 @@
 import { useState } from "react";
 import {
     MapPin, Phone, Globe, Star,
-    ShieldAlert, TrendingUp, AlarmClock
+    ShieldAlert, TrendingUp
 } from "lucide-react";
 import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
-import { scoreSearchResult, getScoreColor, getScoreBg } from "../../utils/leadScore";
+import {
+    scoreSearchResult, getTier,
+    tierConfig, getOpportunityReasons
+} from "../../utils/leadScore";
+import { clsx } from "clsx";
+import toast from "react-hot-toast";
 
 interface ResultCardProps {
     result: SearchResult;
@@ -19,6 +24,9 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
 
     const existingLead = leads.find(l => l.placeId === result.placeId);
     const score = scoreSearchResult(result);
+    const tier = getTier(score);
+    const tConf = tierConfig[tier];
+    const reasons = getOpportunityReasons(result);
 
     const handleSave = async () => {
         if (existingLead || isSaving) return;
@@ -46,7 +54,6 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
 
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3 hover:border-base-700 transition-colors">
-
             {/* Header */}
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -67,20 +74,37 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                     </div>
                 </div>
 
-                {/* Score */}
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0 ${getScoreBg(score)}`}>
-                    <TrendingUp className={`w-3 h-3 ${getScoreColor(score)}`} />
-                    <span className={`text-xs font-semibold ${getScoreColor(score)}`}>{score}</span>
+                {/* Tier + Score */}
+                <div className={clsx(
+                    'flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0',
+                    tConf.bg
+                )}>
+                    <TrendingUp className={clsx('w-3 h-3', tConf.color)} />
+                    <span className={clsx('text-xs font-semibold', tConf.color)}>{score}</span>
                 </div>
             </div>
 
             {/* Badge strip */}
             {result.unclaimedListing && (
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-yellow-400 bg-yellow-500/10">
                         <ShieldAlert className="w-3 h-3" />
                         Unclaimed
                     </span>
+                </div>
+            )}
+
+            {/* Opportunity reasons — hot and warm only */}
+            {tier !== 'low' && reasons.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                    {reasons.slice(0, 2).map((reason, i) => (
+                        <span
+                            key={i}
+                            className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md"
+                        >
+                            ✓ {reason}
+                        </span>
+                    ))}
                 </div>
             )}
 

@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { Lead, ActivityLog, LeadStatus } from "../../types";
 import { supabase } from "../supabase";
 import { useSettingsStore } from "./useSettingsStore";
+import toast from "react-hot-toast";
 
 interface LeadsStore {
     leads: Lead[];
@@ -20,6 +21,7 @@ interface LeadsStore {
     logActivity: (
         entry: Omit<ActivityLog, "id" | "timestamp">
     ) => Promise<void>;
+    setSelectedMessageAngle: (id: string, angle: MessageAngle) => Promise<void>;
 }
 
 export const useLeadsStore = create<LeadsStore>()(
@@ -41,7 +43,6 @@ export const useLeadsStore = create<LeadsStore>()(
                     .order("saved_at", { ascending: false });
 
                 if (!error && data) {
-                
                     const leads: Lead[] = data.map(r => ({
                         id: r.id,
                         name: r.name,
@@ -57,10 +58,12 @@ export const useLeadsStore = create<LeadsStore>()(
                         location: r.location,
                         followUpDate: r.follow_up_date,
                         generatedMessage: r.generated_message,
+                        selectedMessageAngle: r.selected_message_angle,
                         savedAt: r.saved_at,
                         updatedAt: r.updated_at,
                         searchQuery: r.search_query,
-                        searchLocation: r.search_location
+                        searchLocation: r.search_location,
+                        unclaimedListing: r.unclaimed_listing
                     }));
                     set({ leads });
                 }
@@ -127,26 +130,21 @@ export const useLeadsStore = create<LeadsStore>()(
                     updated_at: lead.updatedAt,
                     search_query: lead.searchQuery ?? null,
                     search_location: lead.searchLocation ?? null,
-                    //ask claude about this, should it be here or message generation component
-                    painPoints: {
-                        hasWebsite: false,
-                        weakRating: true,
-                        fewReviews: true,
-                        unclaimedBusiness: true,
-                        missingInstagram: true,
-                        outdatedBranding: false
-                    }
+                    unclaimed_listing: lead.unclaimedListing ?? false
                 });
 
                 if (!error) {
                     set(state => ({
                         leads: [leadWithFollowUp, ...state.leads]
                     }));
+                    toast.success(`${lead.name} saved`);
                     await get().logActivity({
                         leadId: lead.id,
                         leadName: lead.name,
                         message: `Saved ${lead.name}`
                     });
+                } else {
+                    toast.error("Couldn't save lead — try again");
                 }
             },
 
@@ -170,6 +168,7 @@ export const useLeadsStore = create<LeadsStore>()(
 
                 if (error) {
                     await get().fetchLeads();
+                    toast.error("Couldn't update status");
                     return;
                 }
 
@@ -186,8 +185,8 @@ export const useLeadsStore = create<LeadsStore>()(
                     });
                 }
             },
+
             updateNotes: async (id, notes) => {
-                // Optimistic update first
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id
@@ -205,8 +204,9 @@ export const useLeadsStore = create<LeadsStore>()(
                     .update({ notes, updated_at: new Date().toISOString() })
                     .eq("id", id);
 
-                if (error) {
+                if (!error) {
                     await get().fetchLeads();
+                    toast.error("Couldn't save notes");
                 }
             },
 
@@ -228,7 +228,6 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             setFollowUpDate: async (id, date) => {
-                // Optimistic update first
                 set(state => ({
                     leads: state.leads.map(l =>
                         l.id === id ? { ...l, followUpDate: date } : l
@@ -240,11 +239,26 @@ export const useLeadsStore = create<LeadsStore>()(
                     .update({ follow_up_date: date })
                     .eq("id", id);
 
-                if (error) {
+                if (!error) {
+                    toast.success("Follow-up date set");
+                } else {
                     await get().fetchLeads();
+                    toast.error("Couldn't set follow-up date");
                 }
             },
 
+            setSelectedMessageAngle: async (id, angle) => {
+                set(state => ({
+                    leads: state.leads.map(l =>
+                        l.id === id ? { ...l, selectedMessageAngle: angle } : l
+                    )
+                }));
+
+                await supabase
+                    .from("leads")
+                    .update({ selected_message_angle: angle })
+                    .eq("id", id);
+            },
             deleteLead: async id => {
                 set(state => ({
                     leads: state.leads.filter(l => l.id !== id)
@@ -255,13 +269,15 @@ export const useLeadsStore = create<LeadsStore>()(
                     .delete()
                     .eq("id", id);
 
-                if (error) {
+                if (!error) {
+                    toast.success("Lead deleted");
+                } else {
                     await get().fetchLeads();
+                    toast.error("Couldn't delete lead");
                 }
             },
 
             bulkDelete: async ids => {
-                // Optimistic update first
                 set(state => ({
                     leads: state.leads.filter(l => !ids.includes(l.id))
                 }));
@@ -271,8 +287,13 @@ export const useLeadsStore = create<LeadsStore>()(
                     .delete()
                     .in("id", ids);
 
-                if (error) {
+                if (!error) {
+                    toast.success(
+                        `${ids.length} lead${ids.length > 1 ? "s" : ""} deleted`
+                    );
+                } else {
                     await get().fetchLeads();
+                    toast.error("Couldn't delete leads");
                 }
             },
 
@@ -288,7 +309,6 @@ export const useLeadsStore = create<LeadsStore>()(
                     timestamp: new Date().toISOString()
                 };
 
-                // Optimistic update first
                 set(state => ({ activity: [log, ...state.activity] }));
 
                 const { error } = await supabase.from("activity").insert({

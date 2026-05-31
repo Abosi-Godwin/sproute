@@ -19,6 +19,8 @@ export type LeadStatus =
     | "converted"
     | "dead"
     | "not_on_whatsapp";
+    
+export type MessageAngle = 'curiosity' | 'friendly' | 'direct';
 
 export interface Lead {
     id: string;
@@ -31,12 +33,13 @@ export interface Lead {
     reviews?: number;
     placeId: string;
     status: LeadStatus;
-    savedAt: string;
-    updatedAt: string;
     notes?: string;
     location: string;
-    generatedMessage?: string;
     followUpDate?: string;
+    generatedMessage?: string;
+    selectedMessageAngle?: MessageAngle;
+    savedAt: string;
+    updatedAt: string;
     searchQuery?: string;
     searchLocation?: string;
     unclaimedListing?: boolean;
