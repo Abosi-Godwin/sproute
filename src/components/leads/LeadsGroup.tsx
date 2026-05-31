@@ -20,7 +20,10 @@ export default function LeadsGroup({
         <div className="space-y-3">
             <div className="flex items-center gap-3">
                 <p className="text-xs font-semibold text-base-400 uppercase tracking-wider capitalize">
-                    {label}
+                    
+                      {label
+                                .replace(/_/g, " ")
+                                .replace(/\b\w/g, c => c.toUpperCase())}
                 </p>
                 <span className="text-xs text-base-600">{leads.length}</span>
             </div>
@@ -35,14 +38,16 @@ export default function LeadsGroup({
 function LeadsGrid({
     leads,
     selected,
-    toggleSelect,
+    toggleSelect
 }: {
     leads: Lead[];
     selected: string[];
     toggleSelect: (id: string) => void;
 }) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+    const [scrollElement, setScrollElement] = useState<HTMLElement | null>(
+        null
+    );
 
     useLayoutEffect(() => {
         setScrollElement(document.getElementById("main-content"));
@@ -54,7 +59,7 @@ function LeadsGrid({
         estimateSize: () => 340,
         overscan: 4,
         scrollMargin: containerRef.current?.offsetTop ?? 0,
-        measureElement: (el) => el.getBoundingClientRect().height,
+        measureElement: el => el.getBoundingClientRect().height
     });
 
     return (
@@ -63,10 +68,10 @@ function LeadsGrid({
                 style={{
                     height: `${virtualizer.getTotalSize()}px`,
                     width: "100%",
-                    position: "relative",
+                    position: "relative"
                 }}
             >
-                {virtualizer.getVirtualItems().map((virtualItem) => (
+                {virtualizer.getVirtualItems().map(virtualItem => (
                     <div
                         key={virtualItem.key}
                         data-index={virtualItem.index}
@@ -80,7 +85,7 @@ function LeadsGrid({
                                 virtualItem.start -
                                 virtualizer.options.scrollMargin
                             }px)`,
-                            paddingBottom: "16px",
+                            paddingBottom: "16px"
                         }}
                     >
                         <LeadCard
