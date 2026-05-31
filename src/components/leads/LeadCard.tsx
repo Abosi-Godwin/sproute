@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+ import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import {
-    MapPin, Phone, Globe, Star, Trash2,
+    Phone, Globe, Star, Trash2,
     MoreVertical, CheckSquare, Loader2,
-    MapPinned, ShieldAlert, TrendingUp,
-    Flame, AlarmClock
+    MapPinned, ShieldAlert, Flame, AlarmClock,
+    Sparkles, Clock, CheckCircle2, XCircle,
+    MessageCircle, Search
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Lead, LeadStatus } from "../../types";
@@ -35,8 +36,69 @@ const statusStyles: Record<LeadStatus, string> = {
     not_on_whatsapp: "bg-orange-500/10 text-orange-400",
 };
 
+function getNextAction(lead: Lead): { icon: React.ElementType; text: string; color: string } | null {
+    const isOverdue =
+        lead.followUpDate && new Date(lead.followUpDate) < new Date();
+
+    switch (lead.status) {
+        case 'new':
+            return {
+                icon: Sparkles,
+                text: 'Ready to message generate now',
+                color: 'text-brand-400',
+            };
+        case 'messaged':
+            if (isOverdue) return {
+                icon: AlarmClock,
+                text: 'Follow-up overdue reach out now',
+                color: 'text-orange-400',
+            };
+            if (lead.followUpDate) {
+                const days = Math.ceil(
+                    (new Date(lead.followUpDate).getTime() - Date.now()) /
+                    (1000 * 60 * 60 * 24)
+                );
+                return {
+                    icon: Clock,
+                    text: days === 0
+                        ? 'Follow up today'
+                        : `Follow up in ${days} day${days > 1 ? 's' : ''}`,
+                    color: 'text-blue-400',
+                };
+            }
+            return { icon: Clock, text: 'Set a follow-up date', color: 'text-base-500' };
+        case 'replied':
+            return {
+                icon: MessageCircle,
+                text: 'They replied — close them now',
+                color: 'text-yellow-400',
+            };
+        case 'converted':
+            return {
+                icon: CheckCircle2,
+                text: 'Client secured',
+                color: 'text-brand-400',
+            };
+        case 'not_on_whatsapp':
+            return {
+                icon: Search,
+                text: 'Find their WhatsApp number',
+                color: 'text-base-500',
+            };
+        case 'dead':
+            return {
+                icon: XCircle,
+                text: 'Marked as dead',
+                color: 'text-base-600',
+            };
+        default:
+            return null;
+    }
+}
+
 export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps) {
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [localStatus, setLocalStatus] = useState<LeadStatus>(lead.status);
     const [menuOpen, setMenuOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -49,11 +111,16 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
     const age = getLeadAge(lead.savedAt, lead.status);
     const ageConf = ageConfig[age];
     const reasons = getOpportunityReasons(lead);
+    const nextAction = getNextAction(lead);
 
-    const isOverdue =
-        ["messaged", "replied"].includes(lead.status) &&
-        lead.followUpDate &&
-        new Date(lead.followUpDate) < new Date();
+    useEffect(() => {
+        setLocalStatus(lead.status);
+    }, [lead.status]);
+
+    const handleStatusChange = async (newStatus: LeadStatus) => {
+        setLocalStatus(newStatus);
+        await updateStatus(lead.id, newStatus);
+    };
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -99,18 +166,14 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Tier + Score badge */}
-                    <div className={clsx(
-                        'flex items-center gap-1 px-2 py-0.5 rounded-lg',
-                        tConf.bg
-                    )}>
-                        <TrendingUp className={clsx('w-3 h-3', tConf.color)} />
+                    {/* Score as X/10 */}
+                    <div className={clsx('px-2 py-0.5 rounded-lg', tConf.bg)}>
                         <span className={clsx('text-xs font-semibold', tConf.color)}>
-                            {score}
+                            {score}/10
                         </span>
                     </div>
 
-                    {/* Three-dot menu */}
+                    {/* Menu */}
                     <div className="relative" ref={menuRef}>
                         <button
                             onClick={() => setMenuOpen(!menuOpen)}
@@ -144,7 +207,7 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
             </div>
 
             {/* Badge strip */}
-            {(ageConf || isOverdue || lead.unclaimedListing) && (
+            {(ageConf || lead.unclaimedListing) && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                     {ageConf && (
                         <span className={clsx(
@@ -153,12 +216,6 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
                         )}>
                             <Flame className="w-3 h-3" />
                             {ageConf.label}
-                        </span>
-                    )}
-                    {isOverdue && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-orange-400 bg-orange-500/10">
-                            <AlarmClock className="w-3 h-3" />
-                            Follow-up overdue
                         </span>
                     )}
                     {lead.unclaimedListing && (
@@ -170,26 +227,29 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
                 </div>
             )}
 
-            {/* Opportunity reasons — hot and warm only */}
+            {/* Opportunity reasons */}
             {tier !== 'low' && reasons.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                     {reasons.slice(0, 2).map((reason, i) => (
-                        <span
-                            key={i}
-                            className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md"
-                        >
+                        <span key={i} className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md">
                             ✓ {reason}
                         </span>
                     ))}
                 </div>
             )}
 
-            {/* Details */}
-            <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-xs text-base-400">
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{lead.address}</span>
+            {/* Next action — replaces address */}
+            {nextAction && (
+                <div className="flex items-center gap-2">
+                    <nextAction.icon className={clsx('w-3.5 h-3.5 shrink-0', nextAction.color)} />
+                    <p className={clsx('text-xs font-medium', nextAction.color)}>
+                        {nextAction.text}
+                    </p>
                 </div>
+            )}
+
+            {/* Contact info */}
+            <div className="space-y-1.5">
                 {lead.phone && (
                     <div className="flex items-center gap-2 text-xs text-base-400">
                         <Phone className="w-3.5 h-3.5 shrink-0" />
@@ -213,11 +273,11 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
             {/* Footer */}
             <div className="flex items-center gap-2">
                 <select
-                    value={lead.status}
-                    onChange={e => updateStatus(lead.id, e.target.value as LeadStatus)}
+                    value={localStatus}
+                    onChange={e => handleStatusChange(e.target.value as LeadStatus)}
                     className={clsx(
                         "text-xs font-medium px-3 py-2 rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer",
-                        statusStyles[lead.status]
+                        statusStyles[localStatus]
                     )}
                     style={{ flex: "0 0 52%" }}
                 >

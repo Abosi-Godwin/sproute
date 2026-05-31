@@ -17,6 +17,8 @@ export default function LeadDetail() {
     const { outreachTone } = useSettingsStore();
     const lead = leads.find(l => l.id === id);
 
+
+//Leave for now
     const showTemplates = ["messaged", "replied", "converted"].includes(
         lead?.status
     );
@@ -63,7 +65,7 @@ export default function LeadDetail() {
                 </div>
                 <div className="space-y-6">
                     <MessageGenerator lead={lead} />
-                    {showTemplates && (
+                    
                         <ReplyTemplates
                             lead={lead}
                             tone={
@@ -72,7 +74,7 @@ export default function LeadDetail() {
                                     : outreachTone
                             }
                         />
-                    )}
+                    
                     <ClosingGuide />
                     <LeadActivity leadId={lead.id} />
                 </div>
