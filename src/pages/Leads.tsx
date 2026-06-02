@@ -10,6 +10,7 @@ import LeadsFilter from "../components/leads/LeadsFilter";
 import LeadsGroup from "../components/leads/LeadsGroup";
 import { exportLeadsToCsv } from "../utils/exportCsv";
 import { Download, Trash2, Search, Users, Loader2 } from "lucide-react";
+import OutreachQueue from "../components/leads/OutreachQueue";
 
 const STATUS_ORDER: LeadStatus[] = [
     "new",
@@ -45,7 +46,7 @@ export default function Leads() {
     const { leads, bulkDelete, isLoading } = useLeadsStore();
 
     const navigate = useNavigate();
- 
+
     const {
         selectedStatus,
         noWebsiteOnly,
@@ -58,26 +59,48 @@ export default function Leads() {
     } = useLeadsFilterStore();
     const [searchParams] = useSearchParams();
 
+const isFiltering =
+    search.length > 0 ||
+    selectedStatus !== 'all' ||
+    selectedTier !== 'all' ||
+    noWebsiteOnly ||
+    hasPhoneOnly;
+ 
+
     useEffect(() => {
         const filter = searchParams.get("filter");
         if (filter === "no-website") setNoWebsiteOnly(true);
         if (filter === "new") setSelectedStatus("new");
         if (filter === "messaged") setSelectedStatus("messaged");
-    }, [searchParams, setNoWebsiteOnly, setSelectedStatus]);
-    
-    
+        if (filter === "overdue") {
+            setSelectedStatus("messaged");
+        }
+    }, [searchParams]);
 
-const filtered = useMemo(() => {
-    const lowerSearch = search.toLowerCase();
-    return leads.filter(lead => {
-        if (search && !lead.name.toLowerCase().includes(lowerSearch)) return false;
-        if (selectedStatus !== 'all' && lead.status !== selectedStatus) return false;
-        if (noWebsiteOnly && lead.website) return false;
-        if (hasPhoneOnly && !lead.phone) return false;
-        if (selectedTier !== 'all' && getTier(scoreLead(lead)) !== selectedTier) return false;
-        return true;
-    });
-}, [leads, search, selectedStatus, noWebsiteOnly, hasPhoneOnly, selectedTier]);
+    const filtered = useMemo(() => {
+        const lowerSearch = search.toLowerCase();
+        return leads.filter(lead => {
+            if (search && !lead.name.toLowerCase().includes(lowerSearch))
+                return false;
+            if (selectedStatus !== "all" && lead.status !== selectedStatus)
+                return false;
+            if (noWebsiteOnly && lead.website) return false;
+            if (hasPhoneOnly && !lead.phone) return false;
+            if (
+                selectedTier !== "all" &&
+                getTier(scoreLead(lead)) !== selectedTier
+            )
+                return false;
+            return true;
+        });
+    }, [
+        leads,
+        search,
+        selectedStatus,
+        noWebsiteOnly,
+        hasPhoneOnly,
+        selectedTier
+    ]);
 
     const groups = useMemo(
         () => groupLeads(filtered, groupBy),
@@ -160,7 +183,7 @@ const filtered = useMemo(() => {
             )}
 
             <LeadsFilter />
-
+            {!isFiltering && <OutreachQueue />}
             {isLoading ? (
                 <div className="flex justify-center py-16">
                     <Loader2 className="w-6 h-6 text-brand-400 animate-spin" />

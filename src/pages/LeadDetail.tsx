@@ -4,24 +4,18 @@ import { useLeadsStore } from "../lib/stores/useLeadsStore";
 import LeadInfo from "../components/leads/LeadInfo";
 import LeadNotes from "../components/leads/LeadNotes";
 import LeadActivity from "../components/leads/LeadActivity";
+import WhatsAppNumberField from "../components/leads/WhatsAppNumberField";
 import MessageGenerator from "../components/leads/MessageGenerator";
-import ReplyTemplates from "../components/leads/ReplyTemplates";
+import OutreachFlow from "../components/leads/OutreachFlow";
 import ClosingGuide from "../components/leads/ClosingGuide";
-import { useSettingsStore } from "../lib/stores/useSettingsStore";
+import OpportunitySummary from "../components/leads/OpportunitySummary";
 
 export default function LeadDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { leads } = useLeadsStore();
 
-    const { outreachTone } = useSettingsStore();
     const lead = leads.find(l => l.id === id);
-
-
-//Leave for now
-    const showTemplates = ["messaged", "replied", "converted"].includes(
-        lead?.status
-    );
 
     if (!lead) {
         return (
@@ -39,7 +33,6 @@ export default function LeadDetail() {
 
     return (
         <div className="p-6 space-y-6">
-            {/* Header */}
             <div className="flex items-center gap-3">
                 <button
                     onClick={() => navigate("/leads")}
@@ -57,26 +50,21 @@ export default function LeadDetail() {
                 </div>
             </div>
 
-            {/* Content grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left — context */}
                 <div className="space-y-6">
                     <LeadInfo lead={lead} />
                     <LeadNotes lead={lead} />
-                </div>
-                <div className="space-y-6">
-                    <MessageGenerator lead={lead} />
-                    
-                        <ReplyTemplates
-                            lead={lead}
-                            tone={
-                                outreachTone === "formal"
-                                    ? "casual"
-                                    : outreachTone
-                            }
-                        />
-                    
-                    <ClosingGuide />
                     <LeadActivity leadId={lead.id} />
+                </div>
+
+                {/* Right — action */}
+                <div className="space-y-6">
+                    <OpportunitySummary lead={lead} />
+                    <WhatsAppNumberField lead={lead} />
+                    <MessageGenerator lead={lead} />
+                    <OutreachFlow lead={lead} />
+                    <ClosingGuide />
                 </div>
             </div>
         </div>

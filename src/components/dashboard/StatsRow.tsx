@@ -1,3 +1,4 @@
+
 import { Globe, Zap, TrendingUp, MessageCircle, Send } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
@@ -95,44 +96,14 @@ export default function StatsRow({ leads, activity }: StatsRowProps) {
             icon: TrendingUp,
             color: "text-brand-400",
             iconBg: "bg-brand-500/10"
-        },
-        {
-            label: "Today's Outreach",
-            value: todayMessaged,
-            icon: Send,
-            color: "text-purple-400",
-            iconBg: "bg-purple-500/10"
         }
     ];
 
     return (
-        <div className="space-y-3">
-            {/* Top 4 stats — 2 column grid */}
-            <div className="grid grid-cols-2 gap-3">
-                {stats.slice(0, 4).map(stat => (
-                    <StatCard key={stat.label} {...stat} />
-                ))}
-            </div>
-
-            {/* Today's Outreach — full width */}
-            <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex items-center justify-between hover:border-base-700 transition-colors">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                        <Send className="w-4 h-4 text-purple-400" />
-                    </div>
-                    <div>
-                        <p className="text-xs text-base-400">
-                            Today's Outreach
-                        </p>
-                        <p className="text-xs text-base-600">
-                            Resets at midnight
-                        </p>
-                    </div>
-                </div>
-                <p className="text-2xl font-display font-bold text-purple-400">
-                    {todayMessaged}
-                </p>
-            </div>
+        <div className="grid grid-cols-2 gap-3">
+            {stats.slice(0, 4).map(stat => (
+                <StatCard key={stat.label} {...stat} />
+            ))}
         </div>
     );
 }

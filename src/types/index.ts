@@ -1,17 +1,3 @@
-// Global shared types
-
-export interface ApiResponse<T> {
-    data: T;
-    message: string;
-    success: boolean;
-}
-
-export interface PaginatedResponse<T> extends ApiResponse<T[]> {
-    total: number;
-    page: number;
-    limit: number;
-}
-
 export type LeadStatus =
     | "new"
     | "messaged"
@@ -19,8 +5,19 @@ export type LeadStatus =
     | "converted"
     | "dead"
     | "not_on_whatsapp";
-    
-export type MessageAngle = 'curiosity' | 'friendly' | 'direct';
+
+export type MessageAngle = "curiosity" | "friendly" | "direct";
+export type OutreachFlowTab = "no_reply" | "replied";
+
+export interface LeadPainPoints {
+    noWebsite: boolean;
+    unclaimedListing: boolean;
+    establishedBusiness: boolean;
+    activeCustomers: boolean;
+    excellentReputation: boolean;
+    strongReputation: boolean;
+    lowVisibility: boolean;
+}
 
 export interface Lead {
     id: string;
@@ -38,6 +35,9 @@ export interface Lead {
     followUpDate?: string;
     generatedMessage?: string;
     selectedMessageAngle?: MessageAngle;
+    whatsappNumber?: string;
+    painPoints?: LeadPainPoints;
+    outreachFlowTab?: OutreachFlowTab;
     savedAt: string;
     updatedAt: string;
     searchQuery?: string;
@@ -62,8 +62,8 @@ export interface SearchResult {
     website?: string;
     rating?: number;
     reviews?: number;
+    coordinates?: { lat: number; lng: number };
     unclaimedListing?: boolean;
-    coordinates?: { latitude: number; longitude: number };
 }
 
 export interface SearchHistory {
