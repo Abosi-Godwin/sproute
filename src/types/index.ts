@@ -7,7 +7,7 @@ export type LeadStatus =
     | "not_on_whatsapp";
 
 export type MessageAngle = "curiosity" | "friendly" | "direct";
-export type OutreachFlowTab = "no_reply" | "replied";
+export type OutreachFlowTab = "no_reply" | "replied" | "chatHelper";
 
 export interface LeadPainPoints {
     noWebsite: boolean;
@@ -17,6 +17,11 @@ export interface LeadPainPoints {
     excellentReputation: boolean;
     strongReputation: boolean;
     lowVisibility: boolean;
+}
+
+export interface FollowUpSequence {
+    day3: string;
+    day7: string;
 }
 
 export interface Lead {
@@ -38,6 +43,7 @@ export interface Lead {
     whatsappNumber?: string;
     painPoints?: LeadPainPoints;
     outreachFlowTab?: OutreachFlowTab;
+    followUpSequence?: FollowUpSequence;
     savedAt: string;
     updatedAt: string;
     searchQuery?: string;

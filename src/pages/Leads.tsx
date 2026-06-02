@@ -46,26 +46,27 @@ export default function Leads() {
     const { leads, bulkDelete, isLoading } = useLeadsStore();
 
     const navigate = useNavigate();
-
+ 
     const {
         selectedStatus,
         noWebsiteOnly,
         hasPhoneOnly,
+        followUpDueOnly,
         groupBy,
         sortBy,
         selectedTier,
         setSelectedStatus,
         setNoWebsiteOnly
     } = useLeadsFilterStore();
+
     const [searchParams] = useSearchParams();
 
-const isFiltering =
-    search.length > 0 ||
-    selectedStatus !== 'all' ||
-    selectedTier !== 'all' ||
-    noWebsiteOnly ||
-    hasPhoneOnly;
- 
+    const isFiltering =
+        search.length > 0 ||
+        selectedStatus !== "all" ||
+        selectedTier !== "all" ||
+        noWebsiteOnly ||
+        hasPhoneOnly;
 
     useEffect(() => {
         const filter = searchParams.get("filter");
@@ -77,8 +78,12 @@ const isFiltering =
         }
     }, [searchParams]);
 
+    // Add to filtered useMemo
     const filtered = useMemo(() => {
         const lowerSearch = search.toLowerCase();
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+
         return leads.filter(lead => {
             if (search && !lead.name.toLowerCase().includes(lowerSearch))
                 return false;
@@ -91,6 +96,12 @@ const isFiltering =
                 getTier(scoreLead(lead)) !== selectedTier
             )
                 return false;
+            if (followUpDueOnly) {
+                if (!["messaged", "replied"].includes(lead.status))
+                    return false;
+                if (!lead.followUpDate) return false;
+                if (new Date(lead.followUpDate) > today) return false;
+            }
             return true;
         });
     }, [
@@ -99,7 +110,8 @@ const isFiltering =
         selectedStatus,
         noWebsiteOnly,
         hasPhoneOnly,
-        selectedTier
+        selectedTier,
+        followUpDueOnly
     ]);
 
     const groups = useMemo(

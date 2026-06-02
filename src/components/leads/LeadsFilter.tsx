@@ -35,8 +35,9 @@ export default function LeadsFilter() {
         setHasPhoneOnly,
         setGroupBy,
         setSortBy,
-        setSelectedTier,
+        setSelectedTier,followUpDueOnly, setFollowUpDueOnly 
     } = useLeadsFilterStore();
+
 
     // Count active non-status filters
     const activeCount = [
@@ -138,6 +139,19 @@ export default function LeadsFilter() {
                             >
                                 Has phone
                             </button>
+                            
+
+<button
+    onClick={() => setFollowUpDueOnly(!followUpDueOnly)}
+    className={clsx(
+        'text-xs px-3 py-1.5 rounded-lg transition-colors',
+        followUpDueOnly
+            ? 'bg-orange-500/10 text-orange-400'
+            : 'bg-base-800 text-base-500 hover:text-base-300'
+    )}
+>
+    Follow-up due
+</button>
                         </div>
                     </div>
 
