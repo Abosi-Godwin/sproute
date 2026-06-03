@@ -24,6 +24,12 @@ export interface FollowUpSequence {
     day7: string;
 }
 
+export interface ChatMessage {
+    role: "prospect" | "suggested";
+    text: string;
+    timestamp: string;
+}
+
 export interface Lead {
     id: string;
     name: string;
@@ -44,6 +50,7 @@ export interface Lead {
     painPoints?: LeadPainPoints;
     outreachFlowTab?: OutreachFlowTab;
     followUpSequence?: FollowUpSequence;
+    chatHistory?: ChatMessage[];
     savedAt: string;
     updatedAt: string;
     searchQuery?: string;

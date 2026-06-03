@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     MessageCircle,
     Loader2,
@@ -6,16 +6,22 @@ import {
     Copy,
     Check,
     RefreshCw,
-    Send
+    Send,
+    Trash2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { clsx } from "clsx";
-import { Lead, OutreachFlowTab, FollowUpSequence } from "../../types";
+import {
+    Lead,
+    OutreachFlowTab,
+    FollowUpSequence,
+    ChatMessage
+} from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../utils/painPoints";
 
-// ─── Helpers ─────────────────────────────────────────────────────
+// ─── Shared Helpers ─────
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
@@ -36,7 +42,20 @@ async function callGemini(
     return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
-function CopyButton({
+async function copyText(text: string) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        const el = document.createElement("textarea");
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+    }
+}
+
+function CopyBtn({
     text,
     id,
     copiedId,
@@ -65,18 +84,17 @@ function CopyButton({
     );
 }
 
-function WhatsAppButton({ text, number }: { text: string; number?: string }) {
+function WABtn({ text, number }: { text: string; number?: string }) {
     if (!number) return null;
-    const open = () => {
-        const clean = number.replace(/\D/g, "");
-        window.open(
-            `https://wa.me/${clean}?text=${encodeURIComponent(text)}`,
-            "_blank"
-        );
-    };
     return (
         <button
-            onClick={open}
+            onClick={() => {
+                const clean = number.replace(/\D/g, "");
+                window.open(
+                    `https://wa.me/${clean}?text=${encodeURIComponent(text)}`,
+                    "_blank"
+                );
+            }}
             className="flex items-center gap-1.5 flex-1 justify-center text-xs font-medium px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
         >
             <MessageCircle className="w-3.5 h-3.5" />
@@ -85,30 +103,18 @@ function WhatsAppButton({ text, number }: { text: string; number?: string }) {
     );
 }
 
-async function copyText(text: string) {
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch {
-        const el = document.createElement("textarea");
-        el.value = text;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand("copy");
-        document.body.removeChild(el);
-    }
-}
+// ─── No Reply Tab ──
 
-// ─── No Reply Tab ─────────────────────────────────────────────────
-
-const DAY14_STATIC =
-    "I'll leave this here for now. Whenever you're ready to revisit it, just reach out — I'll be around.";
+const DAY14_CASUAL =
+    "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
 const DAY14_PIDGIN =
     "I go leave am here for now. Anytime you wan revisit am, just reach out — I dey.";
+const DAY14_FORMAL =
+    "I understand you may be occupied. Please do not hesitate to reach out whenever you are ready to explore this further.";
 
 function NoReplyTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
     const { saveFollowUpSequence } = useLeadsStore();
-
     const [sequence, setSequence] = useState<FollowUpSequence | null>(
         lead.followUpSequence ?? null
     );
@@ -117,14 +123,20 @@ function NoReplyTab({ lead }: { lead: Lead }) {
 
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
     const toneMap: Record<string, string> = {
-        casual: "Casual Nigerian English, warm and direct.",
-        formal: "Professional but approachable.",
-        pidgin: "Natural Nigerian Pidgin English throughout."
+        casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
+        formal: "Professional and approachable Standard English. NOT Pidgin.",
+        pidgin: "Natural Nigerian Pidgin English throughout — every sentence."
     };
     const painContext = lead.painPoints
         ? painPointsToContext(lead.painPoints)
         : "No specific signals";
-    const day14 = outreachTone === "pidgin" ? DAY14_PIDGIN : DAY14_STATIC;
+
+    const day14 =
+        outreachTone === "pidgin"
+            ? DAY14_PIDGIN
+            : outreachTone === "formal"
+              ? DAY14_FORMAL
+              : DAY14_CASUAL;
 
     const generate = async () => {
         setIsLoading(true);
@@ -139,15 +151,19 @@ Generate 2 follow-up messages:
 
 Day 3: Short check-in. One or two sentences. No pressure. Do not repeat the original pitch. End with a soft question.
 
-Day 7: Reference ONE specific business signal from the data. Make a genuine observation. Ask one question that makes the business owner think. No pitch. No "just checking in". Make it feel like you actually noticed something about their business.
+Day 7: Reference ONE specific business signal from the data. Make a genuine observation about their business situation. Ask one question that makes the business owner think. No pitch. No "just checking in". Make it feel like you noticed something real.
 
 Rules:
 - Each message under 50 words
-- Sound like a real person
+- Sound like a real person not a bot
 - No corporate language
 - No fake flattery
-- Only reference facts from the data
+- Only reference facts from the data provided
 - Never invent information
+- Natural question to end each message
+- If tone is casual or formal, write in Standard English only — no Pidgin words or phrases
+- If tone is pidgin, write entirely in Pidgin
+- Never mix tones
 
 Return ONLY valid JSON:
 {
@@ -188,8 +204,18 @@ Notes: ${lead.notes || "none"}`
 
     const messages = sequence
         ? [
-              { id: "day3", label: "Day 3 — Check in", text: sequence.day3 },
-              { id: "day7", label: "Day 7 — Add value", text: sequence.day7 },
+              {
+                  id: "day3",
+                  label: "Day 3 — Check in",
+                  text: sequence.day3,
+                  isStatic: false
+              },
+              {
+                  id: "day7",
+                  label: "Day 7 — Add value",
+                  text: sequence.day7,
+                  isStatic: false
+              },
               {
                   id: "day14",
                   label: "Day 14 — Final message",
@@ -238,8 +264,8 @@ Notes: ${lead.notes || "none"}`
                             key={msg.id}
                             className={clsx(
                                 "border rounded-xl p-4 space-y-3",
-                                "isStatic" in msg && msg.isStatic
-                                    ? "border-base-800 opacity-75"
+                                msg.isStatic
+                                    ? "border-base-800 opacity-70"
                                     : "border-base-800"
                             )}
                         >
@@ -247,7 +273,7 @@ Notes: ${lead.notes || "none"}`
                                 <p className="text-xs font-semibold text-base-400">
                                     {msg.label}
                                 </p>
-                                {"isStatic" in msg && msg.isStatic && (
+                                {msg.isStatic && (
                                     <span className="text-xs text-base-600">
                                         Static
                                     </span>
@@ -257,13 +283,13 @@ Notes: ${lead.notes || "none"}`
                                 {msg.text}
                             </p>
                             <div className="flex items-center gap-2">
-                                <CopyButton
+                                <CopyBtn
                                     text={msg.text}
                                     id={msg.id}
                                     copiedId={copiedId}
                                     onCopy={handleCopy}
                                 />
-                                <WhatsAppButton
+                                <WABtn
                                     text={msg.text}
                                     number={whatsappNumber}
                                 />
@@ -276,7 +302,7 @@ Notes: ${lead.notes || "none"}`
     );
 }
 
-// ─── They Replied Tab ─────────────────────────────────────────────
+// ─── Replied Tab ───
 
 const SCENARIOS = [
     { id: "interested", label: "Interested" },
@@ -303,7 +329,6 @@ function getTemplate(
     businessName: string
 ): string {
     const b = businessName;
-
     const templates: Record<
         ScenarioId,
         Record<"casual" | "formal" | "pidgin", string>
@@ -319,14 +344,14 @@ function getTemplate(
             pidgin: `E depend on wetin you need exactly. Once I understand your situation I go fit give you correct price. I fit ask small questions?`
         },
         how_found: {
-            casual: `I was searching for ${b} online and noticed a few things worth mentioning. That's what prompted me to reach out. Is this a good time to share what I found?`,
+            casual: `I was searching for businesses like ${b} online and noticed a few things worth mentioning. That is what prompted me to reach out. Is this a good time to share what I found?`,
             formal: `I came across ${b} while conducting some research and noticed a few observations I thought might be useful. Would you be open to hearing them?`,
             pidgin: `I dey search for ${b} online and I see some things wey I think fit interest you. Na that one make me reach out. E good time to share wetin I see?`
         },
         has_website: {
-            casual: `Got it. Out of curiosity, is it doing well for you — are you getting inquiries or bookings through it?`,
+            casual: `Got it. Out of curiosity, is it doing well for you — are you getting inquiries or bookings through it regularly?`,
             formal: `Understood. May I ask how well the current website is performing for ${b}? Is it generating inquiries or bookings consistently?`,
-            pidgin: `I hear you. I just wan ask — the website dey bring customers or inquiries for ${b}?`
+            pidgin: `I hear you. I just wan ask — the website dey bring customers or inquiries for ${b} regularly?`
         },
         need_time: {
             casual: `No problem. When would be a good time for me to follow up — next week or the week after?`,
@@ -344,7 +369,6 @@ function getTemplate(
             pidgin: `Thanks. Anytime real person from ${b} see this message, I go love share quick idea. No rush at all.`
         }
     };
-
     return templates[scenario][tone];
 }
 
@@ -358,9 +382,9 @@ function RepliedTab({ lead }: { lead: Lead }) {
     const text = getTemplate(activeScenario, tone, lead.name);
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
 
-    const handleCopy = async () => {
-        await copyText(text);
-        setCopiedId(activeScenario);
+    const handleCopy = async (t: string, id: string) => {
+        await copyText(t);
+        setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
         toast.success("Copied");
     };
@@ -370,7 +394,6 @@ function RepliedTab({ lead }: { lead: Lead }) {
             <p className="text-xs text-base-500">
                 Select what happened and copy the right response.
             </p>
-
             <div className="flex items-center gap-2 flex-wrap">
                 {SCENARIOS.map(s => (
                     <button
@@ -387,38 +410,36 @@ function RepliedTab({ lead }: { lead: Lead }) {
                     </button>
                 ))}
             </div>
-
             <div className="border border-base-800 rounded-xl p-4 space-y-3">
                 <p className="text-sm text-base-200 leading-relaxed">{text}</p>
                 <div className="flex items-center gap-2">
-                    <CopyButton
+                    <CopyBtn
                         text={text}
                         id={activeScenario}
                         copiedId={copiedId}
                         onCopy={handleCopy}
                     />
-                    <WhatsAppButton text={text} number={whatsappNumber} />
+                    <WABtn text={text} number={whatsappNumber} />
                 </div>
             </div>
         </div>
     );
 }
 
-// ─── Chat Helper Tab ──────────────────────────────────────────────
-
-interface ChatMessage {
-    role: "prospect" | "suggested";
-    text: string;
-}
+// ─── Chat Helper Tab ───
 
 function ChatHelperTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
+    const { saveChatHistory } = useLeadsStore();
     const [input, setInput] = useState("");
-    const [history, setHistory] = useState<ChatMessage[]>([]);
+    const [history, setHistory] = useState<ChatMessage[]>(
+        lead.chatHistory ?? []
+    );
     const [isLoading, setIsLoading] = useState(false);
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-
+    const bottomRef = useRef<HTMLDivElement>(null);
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
+
     const painContext = lead.painPoints
         ? painPointsToContext(lead.painPoints)
         : "No specific signals";
@@ -429,12 +450,20 @@ function ChatHelperTab({ lead }: { lead: Lead }) {
         pidgin: "Natural Nigerian Pidgin English throughout."
     };
 
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [history, isLoading]);
+
     const handleSend = async () => {
         const trimmed = input.trim();
         if (!trimmed || isLoading) return;
 
-        const newMessage: ChatMessage = { role: "prospect", text: trimmed };
-        const updatedHistory = [...history, newMessage];
+        const newMsg: ChatMessage = {
+            role: "prospect",
+            text: trimmed,
+            timestamp: new Date().toISOString()
+        };
+        const updatedHistory = [...history, newMsg];
         setHistory(updatedHistory);
         setInput("");
         setIsLoading(true);
@@ -470,20 +499,21 @@ Rules:
 - Ask one question if appropriate
 - Never pitch directly
 - Never make up facts
-- Consider the full conversation history when suggesting`,
-                `Conversation so far:
-${conversationContext}
-
-Suggest the best reply to the prospect's latest message.`
+- Consider the full conversation history`,
+                `Conversation so far:\n${conversationContext}\n\nSuggest the best reply to the prospect's latest message. Return the message text only, no explanation.`
             );
 
-            setHistory(prev => [
-                ...prev,
-                { role: "suggested", text: reply.trim() }
-            ]);
+            const aiMsg: ChatMessage = {
+                role: "suggested",
+                text: reply.trim(),
+                timestamp: new Date().toISOString()
+            };
+            const finalHistory = [...updatedHistory, aiMsg];
+            setHistory(finalHistory);
+            await saveChatHistory(lead.id, finalHistory);
         } catch {
             toast.error("Could not generate reply — try again");
-            setHistory(prev => prev.slice(0, -1));
+            setHistory(updatedHistory);
         } finally {
             setIsLoading(false);
         }
@@ -496,73 +526,148 @@ Suggest the best reply to the prospect's latest message.`
         toast.success("Copied");
     };
 
-    return (
-        <div className="space-y-4">
-            <p className="text-xs text-base-500">
-                Paste what the prospect said and get a suggested reply based on
-                this lead's context and your service.
-            </p>
+    const handleClear = async () => {
+        setHistory([]);
+        await saveChatHistory(lead.id, []);
+        toast.success("Chat cleared");
+    };
 
-            {/* Conversation history */}
-            {history.length > 0 && (
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {history.map((msg, idx) => (
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <p className="text-xs text-base-500">
+                    Paste what the prospect said and get a suggested reply.
+                </p>
+                {history.length > 0 && (
+                    <button
+                        onClick={handleClear}
+                        className="flex items-center gap-1 text-xs text-base-600 hover:text-red-400 transition-colors"
+                    >
+                        <Trash2 className="w-3 h-3" />
+                        Clear
+                    </button>
+                )}
+            </div>
+
+            {/* Chat window */}
+            <div className="bg-base-950 rounded-xl p-3 space-y-3 min-h-32 max-h-96 overflow-y-auto">
+                {history.length === 0 && (
+                    <p className="text-xs text-base-600 text-center py-6">
+                        Paste their first message below to get started
+                    </p>
+                )}
+
+                {history.map((msg, idx) => (
+                    <div
+                        key={idx}
+                        className={clsx(
+                            "flex",
+                            msg.role === "prospect"
+                                ? "justify-end"
+                                : "justify-start"
+                        )}
+                    >
                         <div
-                            key={idx}
                             className={clsx(
-                                "rounded-xl p-3 space-y-2",
+                                "max-w-xs rounded-2xl px-3 py-2 space-y-1.5",
                                 msg.role === "prospect"
-                                    ? "bg-base-800 border border-base-700"
-                                    : "bg-brand-500/5 border border-brand-500/20"
+                                    ? "bg-brand-500/20 rounded-tr-sm"
+                                    : "bg-base-800 rounded-tl-sm"
                             )}
                         >
-                            <p className="text-xs font-semibold text-base-500">
-                                {msg.role === "prospect"
-                                    ? "Prospect said"
-                                    : "Suggested reply"}
-                            </p>
-                            <p className="text-sm text-base-200 leading-relaxed">
+                            <p
+                                className={clsx(
+                                    "text-xs",
+                                    msg.role === "prospect"
+                                        ? "text-brand-200"
+                                        : "text-base-100"
+                                )}
+                            >
                                 {msg.text}
                             </p>
+
                             {msg.role === "suggested" && (
-                                <div className="flex items-center gap-2">
-                                    <CopyButton
-                                        text={msg.text}
-                                        id={String(idx)}
-                                        copiedId={
-                                            copiedIdx !== null
-                                                ? String(copiedIdx)
-                                                : null
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-base-700">
+                                    <button
+                                        onClick={() =>
+                                            handleCopy(msg.text, idx)
                                         }
-                                        onCopy={text => handleCopy(text, idx)}
-                                    />
-                                    <WhatsAppButton
-                                        text={msg.text}
-                                        number={whatsappNumber}
-                                    />
+                                        className="flex items-center gap-1 text-xs text-base-500 hover:text-base-300 transition-colors"
+                                    >
+                                        {copiedIdx === idx ? (
+                                            <>
+                                                <Check className="w-3 h-3 text-brand-400" />{" "}
+                                                Copied
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy className="w-3 h-3" />{" "}
+                                                Copy
+                                            </>
+                                        )}
+                                    </button>
+                                    {whatsappNumber && (
+                                        <>
+                                            <span className="text-base-700">
+                                                ·
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    const clean =
+                                                        whatsappNumber.replace(
+                                                            /\D/g,
+                                                            ""
+                                                        );
+                                                    window.open(
+                                                        `https://wa.me/${clean}?text=${encodeURIComponent(msg.text)}`,
+                                                        "_blank"
+                                                    );
+                                                }}
+                                                className="flex items-center gap-1 text-xs text-green-500 hover:text-green-400 transition-colors"
+                                            >
+                                                <MessageCircle className="w-3 h-3" />
+                                                Send
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    ))}
-                    {isLoading && (
-                        <div className="flex items-center gap-2 py-2">
-                            <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                            <p className="text-xs text-base-500">
-                                Thinking of a reply...
-                            </p>
+                    </div>
+                ))}
+
+                {isLoading && (
+                    <div className="flex justify-start">
+                        <div className="bg-base-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                            <div className="flex items-center gap-1">
+                                <span
+                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
+                                    style={{ animationDelay: "0ms" }}
+                                />
+                                <span
+                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
+                                    style={{ animationDelay: "150ms" }}
+                                />
+                                <span
+                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
+                                    style={{ animationDelay: "300ms" }}
+                                />
+                            </div>
                         </div>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
+
+                <div ref={bottomRef} />
+            </div>
 
             {/* Input */}
-            <div className="space-y-2">
+            <div className="flex items-end gap-2">
                 <textarea
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     placeholder="Paste what the prospect said..."
-                    rows={3}
-                    className="w-full bg-base-800 border border-base-700 rounded-lg px-4 py-3 text-sm text-base-100 placeholder:text-base-500 focus:outline-none focus:border-brand-500 transition-colors resize-none"
+                    rows={2}
+                    className="flex-1 bg-base-800 border border-base-700 rounded-xl px-4 py-3 text-sm text-base-100 placeholder:text-base-500 focus:outline-none focus:border-brand-500 transition-colors resize-none"
                     onKeyDown={e => {
                         if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
@@ -570,32 +675,19 @@ Suggest the best reply to the prospect's latest message.`
                         }
                     }}
                 />
-                <div className="flex items-center justify-between">
-                    <button
-                        onClick={() => setHistory([])}
-                        className="text-xs text-base-600 hover:text-base-400 transition-colors"
-                    >
-                        Clear history
-                    </button>
-                    <button
-                        onClick={handleSend}
-                        disabled={!input.trim() || isLoading}
-                        className="flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                    >
-                        {isLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                            <Send className="w-3.5 h-3.5" />
-                        )}
-                        Suggest Reply
-                    </button>
-                </div>
+                <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading}
+                    className="p-3 rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shrink-0"
+                >
+                    <Send className="w-4 h-4" />
+                </button>
             </div>
         </div>
     );
 }
 
-// ─── Main Component ───────────────────────────────────────────────
+// ─── Main Component ──
 
 export default function OutreachFlow({ lead }: { lead: Lead }) {
     const { setOutreachFlowTab } = useLeadsStore();
@@ -633,7 +725,6 @@ export default function OutreachFlow({ lead }: { lead: Lead }) {
 
             {expanded && (
                 <div className="space-y-4">
-                    {/* Tab switcher */}
                     <div className="flex items-center gap-1 p-1 bg-base-800 rounded-xl">
                         {[
                             { id: "no_reply", label: "No Reply" },
@@ -657,7 +748,6 @@ export default function OutreachFlow({ lead }: { lead: Lead }) {
                         ))}
                     </div>
 
-                    {/* Tab content */}
                     {activeTab === "no_reply" && <NoReplyTab lead={lead} />}
                     {activeTab === "replied" && <RepliedTab lead={lead} />}
                     {activeTab === "chatHelper" && (

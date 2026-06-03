@@ -20,15 +20,16 @@ export default function LeadsGroup({
         <div className="space-y-3">
             <div className="flex items-center gap-3">
                 <p className="text-xs font-semibold text-base-400 uppercase tracking-wider capitalize">
-                    
-                      {label
-                                .replace(/_/g, " ")
-                                .replace(/\b\w/g, c => c.toUpperCase())}
+                    {label
+                        .replace(/_/g, " ")
+                        .replace(/\b\w/g, c => c.toUpperCase())}
                 </p>
                 <span className="text-xs text-base-600">{leads.length}</span>
             </div>
-            <LeadsGrid
-                leads={leads}
+            
+            <LeadCard
+                key={leads[virtualItem.index].id}
+                lead={leads[virtualItem.index]}
                 selected={selected}
                 toggleSelect={toggleSelect}
             />

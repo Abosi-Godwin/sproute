@@ -67,10 +67,10 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     const [error, setError] = useState("");
 
     const toneInstructions: Record<string, string> = {
-        casual: "Casual Nigerian English. Warm and direct like a trusted neighbour texting.",
-        formal: "Professional but approachable. Clear and respectful like a business consultant.",
-        pidgin: "Pure Nigerian Pidgin English throughout. Natural and street-smart, every sentence in Pidgin."
-    };
+    casual: 'Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.',
+    formal: 'Professional and approachable Standard English. NOT Pidgin.',
+    pidgin: 'Natural Nigerian Pidgin English throughout — every sentence.',
+};
 
     const generate = async () => {
         setIsLoading(true);
@@ -124,6 +124,10 @@ Rules:
 - Mention the business name naturally
 - End with a natural question
 - Prioritize observations over pitches
+- If tone is casual or formal, write in Standard English only — no Pidgin words or phrases
+- If tone is pidgin, write entirely in Pidgin
+- Never mix tones
+
 
 Good style example:
 "Hi [Business Name], I was checking ${lead.category?.toLowerCase() || "businesses"} around ${lead.searchLocation || "your area"} and noticed you don't seem to have a website yet. Considering the reviews you've already built up, have you ever thought about one?"
@@ -174,7 +178,6 @@ Generate 3 outreach message variations.`
 
             setMessages(generated);
 
-            // Save all 3 as JSON for persistence
             saveGeneratedMessage(lead.id, JSON.stringify(parsed));
 
             logActivity({
@@ -231,7 +234,7 @@ Generate 3 outreach message variations.`
             message: `Copied ${angle} message for ${lead.name}`
         });
     };
-  
+
     const openWhatsApp = (text: string, angle?: MessageAngle) => {
         const number = lead.whatsappNumber ?? lead.phone;
         if (!number) return;

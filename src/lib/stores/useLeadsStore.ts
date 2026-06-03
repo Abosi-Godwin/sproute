@@ -24,6 +24,7 @@ interface LeadsStore {
         id: string,
         sequence: FollowUpSequence
     ) => Promise<void>;
+    saveChatHistory: (id: string, history: ChatMessage[]) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
     bulkDelete: (ids: string[]) => Promise<void>;
     logActivity: (
@@ -70,6 +71,7 @@ export const useLeadsStore = create<LeadsStore>()(
                         whatsappNumber: r.whatsapp_number,
                         painPoints: r.pain_points,
                         outreachFlowTab: r.outreach_flow_tab ?? "no_reply",
+                        chatHistory: r.chat_history ?? [],
                         savedAt: r.saved_at,
                         updatedAt: r.updated_at,
                         searchQuery: r.search_query,
@@ -117,7 +119,6 @@ export const useLeadsStore = create<LeadsStore>()(
                     .toISOString()
                     .split("T")[0];
 
-                // Auto-derive pain points
                 const painPoints = derivePainPoints(lead);
                 const leadWithFollowUp = {
                     ...lead,
@@ -335,7 +336,18 @@ export const useLeadsStore = create<LeadsStore>()(
                     .update({ outreach_flow_tab: tab })
                     .eq("id", id);
             },
+            saveChatHistory: async (id, history) => {
+                set(state => ({
+                    leads: state.leads.map(l =>
+                        l.id === id ? { ...l, chatHistory: history } : l
+                    )
+                }));
 
+                await supabase
+                    .from("leads")
+                    .update({ chat_history: history })
+                    .eq("id", id);
+            },
             deleteLead: async id => {
                 set(state => ({
                     leads: state.leads.filter(l => l.id !== id)

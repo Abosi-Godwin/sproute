@@ -63,7 +63,7 @@ export default function LeadDetail() {
                     <OpportunitySummary lead={lead} />
                     <WhatsAppNumberField lead={lead} />
                     <MessageGenerator lead={lead} />
-                    <OutreachFlow lead={lead} />
+                    <OutreachFlow key={lead.id} lead={lead} />
                     <ClosingGuide />
                 </div>
             </div>
