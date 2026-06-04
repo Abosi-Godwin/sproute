@@ -26,10 +26,8 @@ export default function LeadsGroup({
                 </p>
                 <span className="text-xs text-base-600">{leads.length}</span>
             </div>
-            
-            <LeadCard
-                key={leads[virtualItem.index].id}
-                lead={leads[virtualItem.index]}
+            <LeadsGrid
+                leads={leads}
                 selected={selected}
                 toggleSelect={toggleSelect}
             />
@@ -89,7 +87,9 @@ function LeadsGrid({
                             paddingBottom: "16px"
                         }}
                     >
+                  
                         <LeadCard
+                            key={leads[virtualItem.index].id}
                             lead={leads[virtualItem.index]}
                             selected={selected}
                             toggleSelect={toggleSelect}

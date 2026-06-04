@@ -20,8 +20,9 @@ import {
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../utils/painPoints";
+import { scoreLead } from "../../utils/leadScore";
 
-// ─── Shared Helpers ─────
+
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
@@ -103,7 +104,18 @@ function WABtn({ text, number }: { text: string; number?: string }) {
     );
 }
 
-// ─── No Reply Tab ──
+ 
+const TONE_MAP: Record<string, string> = {
+    casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
+    formal: "Professional and approachable Standard English. NOT Pidgin.",
+    pidgin: "Natural Nigerian Pidgin English throughout — every sentence in Pidgin."
+};
+
+const TONE_RULES = `- If tone is casual or formal, write in Standard English only — no Pidgin words or phrases
+- If tone is pidgin, write entirely in Pidgin
+- Never mix tones`;
+
+
 
 const DAY14_CASUAL =
     "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
@@ -122,15 +134,9 @@ function NoReplyTab({ lead }: { lead: Lead }) {
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
-    const toneMap: Record<string, string> = {
-        casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
-        formal: "Professional and approachable Standard English. NOT Pidgin.",
-        pidgin: "Natural Nigerian Pidgin English throughout — every sentence."
-    };
     const painContext = lead.painPoints
         ? painPointsToContext(lead.painPoints)
         : "No specific signals";
-
     const day14 =
         outreachTone === "pidgin"
             ? DAY14_PIDGIN
@@ -144,14 +150,14 @@ function NoReplyTab({ lead }: { lead: Lead }) {
             const raw = await callGemini(
                 `You write WhatsApp follow-up messages for freelancers who got no reply.
 
-Tone: ${toneMap[outreachTone]}
+Tone: ${TONE_MAP[outreachTone]}
 Service: ${serviceDescription || "web development"}
 
 Generate 2 follow-up messages:
 
 Day 3: Short check-in. One or two sentences. No pressure. Do not repeat the original pitch. End with a soft question.
 
-Day 7: Reference ONE specific business signal from the data. Make a genuine observation about their business situation. Ask one question that makes the business owner think. No pitch. No "just checking in". Make it feel like you noticed something real.
+Day 7: Reference ONE specific business signal from the data. Make a genuine observation about their business situation. Ask one question that makes the business owner think. No pitch. No "just checking in". Make it feel like you noticed something real about their business.
 
 Rules:
 - Each message under 50 words
@@ -161,9 +167,7 @@ Rules:
 - Only reference facts from the data provided
 - Never invent information
 - Natural question to end each message
-- If tone is casual or formal, write in Standard English only — no Pidgin words or phrases
-- If tone is pidgin, write entirely in Pidgin
-- Never mix tones
+${TONE_RULES}
 
 Return ONLY valid JSON:
 {
@@ -301,26 +305,29 @@ Notes: ${lead.notes || "none"}`
         </div>
     );
 }
-
-// ─── Replied Tab ───
+ 
 
 const SCENARIOS = [
     { id: "interested", label: "Interested" },
     { id: "asked_price", label: "Asked price" },
+    { id: "show_example", label: "Show example" },
     { id: "how_found", label: "How did you find us" },
     { id: "has_website", label: "Already has website" },
     { id: "need_time", label: "Need time to think" },
     { id: "not_now", label: "Not now" },
+    { id: "not_interested", label: "Not interested" },
     { id: "autoreply", label: "Auto-reply" }
 ];
 
 type ScenarioId =
     | "interested"
     | "asked_price"
+    | "show_example"
     | "how_found"
     | "has_website"
     | "need_time"
     | "not_now"
+    | "not_interested"
     | "autoreply";
 
 function getTemplate(
@@ -343,10 +350,15 @@ function getTemplate(
             formal: `The cost depends on the scope of work. I would like to ask a few questions first to give ${b} the most accurate figure. Would that be alright?`,
             pidgin: `E depend on wetin you need exactly. Once I understand your situation I go fit give you correct price. I fit ask small questions?`
         },
+        show_example: {
+            casual: `Sure. Here is a quick example of the kind of website I build — simple, mobile-friendly, easy for customers to contact you from. Have a look and tell me what you think.`,
+            formal: `Of course. I would like to share a brief example of my work — clean, mobile-optimised, and designed to make it easy for customers to reach ${b}. Please have a look and share your thoughts.`,
+            pidgin: `Sure. Here na quick example of the kind of website I dey build — simple, e dey work well on phone, customers fit contact you easy. Take a look tell me wetin you think.`
+        },
         how_found: {
-            casual: `I was searching for businesses like ${b} online and noticed a few things worth mentioning. That is what prompted me to reach out. Is this a good time to share what I found?`,
-            formal: `I came across ${b} while conducting some research and noticed a few observations I thought might be useful. Would you be open to hearing them?`,
-            pidgin: `I dey search for ${b} online and I see some things wey I think fit interest you. Na that one make me reach out. E good time to share wetin I see?`
+            casual: `I was looking through businesses in your area and came across ${b}. I noticed a few things that caught my attention — would you like me to share them?`,
+            formal: `I came across ${b} while looking through local businesses in your area and noticed a few things worth mentioning. Would you be open to hearing them?`,
+            pidgin: `I dey look through businesses for your area and I see ${b}. I notice some things wey catch my eye — you wan make I share them with you?`
         },
         has_website: {
             casual: `Got it. Out of curiosity, is it doing well for you — are you getting inquiries or bookings through it regularly?`,
@@ -362,6 +374,11 @@ function getTemplate(
             casual: `No problem at all. Whenever the time is right, just reach out and we will continue from there.`,
             formal: `Absolutely understood. Please feel free to reach out whenever you are ready and we can take it from there.`,
             pidgin: `No wahala at all. Anytime the time don reach, just message me make we continue from there.`
+        },
+        not_interested: {
+            casual: `No worries at all. Thanks for getting back to me. If anything changes down the line, feel free to reach out. Wishing ${b} all the best.`,
+            formal: `Absolutely understood. Thank you for letting me know. Should circumstances change in the future, please do not hesitate to reach out.`,
+            pidgin: `No wahala at all. Thanks for replying. If anything change for future, just reach out. I dey wish ${b} all the best.`
         },
         autoreply: {
             casual: `Thanks. Whenever a real person from ${b} sees this, I would love to share a quick idea. No rush at all.`,
@@ -425,8 +442,7 @@ function RepliedTab({ lead }: { lead: Lead }) {
         </div>
     );
 }
-
-// ─── Chat Helper Tab ───
+ 
 
 function ChatHelperTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
@@ -439,16 +455,10 @@ function ChatHelperTab({ lead }: { lead: Lead }) {
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
-
     const painContext = lead.painPoints
         ? painPointsToContext(lead.painPoints)
         : "No specific signals";
-
-    const toneMap: Record<string, string> = {
-        casual: "Casual Nigerian English, warm and direct.",
-        formal: "Professional but approachable.",
-        pidgin: "Natural Nigerian Pidgin English throughout."
-    };
+    const score = scoreLead(lead);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -479,7 +489,7 @@ function ChatHelperTab({ lead }: { lead: Lead }) {
             const reply = await callGemini(
                 `You are a sales conversation coach helping a freelancer respond to a prospect on WhatsApp.
 
-Tone: ${toneMap[outreachTone]}
+Tone: ${TONE_MAP[outreachTone]}
 Service: ${serviceDescription || "web development"}
 
 Lead context:
@@ -489,17 +499,29 @@ Has website: ${lead.website ? "yes" : "no"}
 Rating: ${lead.rating ?? "unknown"}
 Reviews: ${lead.reviews ?? "unknown"}
 Business signals: ${painContext}
+Opportunity score: ${score}/10
+
+First determine the conversation stage:
+EXPLORING — prospect is vague, uncertain or just replied for the first time
+ASKING_ABOUT_SERVICE — prospect wants to know what you do or how it works
+ASKING_PRICE — prospect is asking about cost or budget
+BUYING_INTENT — prospect is clearly interested and moving toward a decision
+
+Then respond accordingly:
+If EXPLORING: ask one question to understand their situation better. Do not pitch.
+If ASKING_ABOUT_SERVICE: explain simply and clearly what the service does for a business like theirs. Be direct.
+If ASKING_PRICE: acknowledge the question, then ask one qualifying question about scope before giving a range.
+If BUYING_INTENT: move naturally toward the next concrete step. Suggest a call or send an example.
 
 Rules:
 - Suggest ONE reply only
 - Under 50 words
 - Sound like a real person not a bot
 - No corporate language
-- Move the conversation toward understanding their situation
-- Ask one question if appropriate
-- Never pitch directly
+- No fake flattery
 - Never make up facts
-- Consider the full conversation history`,
+- Consider the full conversation history
+${TONE_RULES}`,
                 `Conversation so far:\n${conversationContext}\n\nSuggest the best reply to the prospect's latest message. Return the message text only, no explanation.`
             );
 
@@ -532,21 +554,52 @@ Rules:
         toast.success("Chat cleared");
     };
 
+    const generateSummary = async () => {
+        if (history.length < 4) return;
+        const conversationText = history
+            .map(
+                m => `${m.role === "prospect" ? "Prospect" : "You"}: ${m.text}`
+            )
+            .join("\n");
+        try {
+            const raw = await callGemini(
+                `Summarise this WhatsApp sales conversation in 4 to 6 bullet points.
+Focus on: what the prospect said about their situation, what they asked about, their level of interest, any objections raised, agreed next steps if any.
+Return plain bullet points only. No headers. No intro sentence.`,
+                conversationText
+            );
+            await copyText(raw.trim());
+            toast.success("Summary copied to clipboard");
+        } catch {
+            toast.error("Could not generate summary");
+        }
+    };
+
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <p className="text-xs text-base-500">
                     Paste what the prospect said and get a suggested reply.
                 </p>
-                {history.length > 0 && (
-                    <button
-                        onClick={handleClear}
-                        className="flex items-center gap-1 text-xs text-base-600 hover:text-red-400 transition-colors"
-                    >
-                        <Trash2 className="w-3 h-3" />
-                        Clear
-                    </button>
-                )}
+                <div className="flex items-center gap-3">
+                    {history.length >= 4 && (
+                        <button
+                            onClick={generateSummary}
+                            className="text-xs text-base-500 hover:text-base-300 transition-colors"
+                        >
+                            Copy summary
+                        </button>
+                    )}
+                    {history.length > 0 && (
+                        <button
+                            onClick={handleClear}
+                            className="flex items-center gap-1 text-xs text-base-600 hover:text-red-400 transition-colors"
+                        >
+                            <Trash2 className="w-3 h-3" />
+                            Clear
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Chat window */}
@@ -577,7 +630,7 @@ Rules:
                         >
                             <p
                                 className={clsx(
-                                    "text-xs",
+                                    "text-xs leading-relaxed",
                                     msg.role === "prospect"
                                         ? "text-brand-200"
                                         : "text-base-100"
@@ -686,8 +739,7 @@ Rules:
         </div>
     );
 }
-
-// ─── Main Component ──
+ 
 
 export default function OutreachFlow({ lead }: { lead: Lead }) {
     const { setOutreachFlowTab } = useLeadsStore();
