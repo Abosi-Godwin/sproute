@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
+import { useUsageStore, FREE_LEADS_LIMIT } from
+'../../lib/stores/useUsageStore';
 import {
     scoreSearchResult, getTier,
     tierConfig, getOpportunityReasons
@@ -27,7 +29,8 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
     const tier = getTier(score);
     const tConf = tierConfig[tier];
     const reasons = getOpportunityReasons(result);
-
+const { isLeadsLimitReached } = useUsageStore();
+const limitReached = isLeadsLimitReached(leads.length);
     const handleSave = async () => {
         if (existingLead || isSaving) return;
         setIsSaving(true);
@@ -130,19 +133,26 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
             </div>
 
             {/* Action */}
-            {existingLead ? (
-                <span className="text-xs text-center py-2 rounded-lg bg-base-800 text-base-400 capitalize">
-                    {existingLead.status.replace(/_/g, " ")}
-                </span>
-            ) : (
-                <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="text-xs font-medium py-2 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 disabled:opacity-50 transition-colors"
-                >
-                    {isSaving ? "Saving..." : "Save Lead"}
-                </button>
-            )}
+          
+
+
+{existingLead ? (
+    <span className="text-xs text-center py-2 rounded-lg bg-base-800 text-base-400 capitalize">
+        {existingLead.status.replace(/_/g, " ")}
+    </span>
+) : limitReached ? (
+    <div className="text-xs text-center py-2 rounded-lg bg-orange-500/10 text-orange-400">
+        Free limit reached ({FREE_LEADS_LIMIT} leads)
+    </div>
+) : (
+    <button
+        onClick={handleSave}
+        disabled={isSaving}
+        className="text-xs font-medium py-2 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 disabled:opacity-50 transition-colors"
+    >
+        {isSaving ? "Saving..." : "Save Lead"}
+    </button>
+)}
         </div>
     );
 }

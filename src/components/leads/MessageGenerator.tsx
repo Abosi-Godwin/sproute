@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState , useEffect} from "react";
 import {
     Sparkles,
     RefreshCw,
@@ -10,6 +10,8 @@ import {
 import { Lead, MessageAngle } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
+import { useUsageStore, FREE_AI_LIMIT } from "../../lib/stores/useUsageStore";
+
 import { clsx } from "clsx";
 import toast from "react-hot-toast";
 
@@ -55,9 +57,21 @@ function parsePersistedMessages(raw?: string): GeneratedMessage[] {
 }
 
 export default function MessageGenerator({ lead }: { lead: Lead }) {
-    const { logActivity, saveGeneratedMessage, setSelectedMessageAngle } =
-        useLeadsStore();
+    const {
+        logActivity,
+        leads,
+        saveGeneratedMessage,
+        setSelectedMessageAngle
+    } = useLeadsStore();
+
     const { outreachTone, serviceDescription } = useSettingsStore();
+
+    const {
+        canGenerateAi,
+        incrementAiGenerations,
+        remainingAiGenerations,
+        resetIfNewDay
+    } = useUsageStore();
 
     const [messages, setMessages] = useState<GeneratedMessage[]>(() =>
         parsePersistedMessages(lead.generatedMessage)
@@ -67,12 +81,19 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     const [error, setError] = useState("");
 
     const toneInstructions: Record<string, string> = {
-    casual: 'Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.',
-    formal: 'Professional and approachable Standard English. NOT Pidgin.',
-    pidgin: 'Natural Nigerian Pidgin English throughout — every sentence.',
-};
+        casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
+        formal: "Professional and approachable Standard English. NOT Pidgin.",
+        pidgin: "Natural Nigerian Pidgin English throughout — every sentence."
+    };
 
     const generate = async () => {
+        resetIfNewDay();
+        if (!canGenerateAi(leads.length)) {
+            toast.error(
+                `Daily AI limit reached (${FREE_AI_LIMIT}/day). Resets at midnight.`
+            );
+            return;
+        }
         setIsLoading(true);
         setError("");
         setMessages([]);
@@ -185,6 +206,7 @@ Generate 3 outreach message variations.`
                 leadName: lead.name,
                 message: `Generated 3 message variations for ${lead.name}`
             });
+            incrementAiGenerations();
             toast.success("3 variations generated");
         } catch (err: any) {
             const message = err.message ?? "";
@@ -252,43 +274,40 @@ Generate 3 outreach message variations.`
         });
     };
 
+    // Call on mount to reset count if new day
+    useEffect(() => {
+        resetIfNewDay();
+    }, []);
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                    <h3 className="font-display font-semibold text-base-100">
-                        Message Generator
-                    </h3>
-                    {lead.selectedMessageAngle && (
-                        <p className="text-xs text-base-500">
-                            Last used:{" "}
-                            <span
-                                className={
-                                    angleConfig[lead.selectedMessageAngle].color
-                                }
-                            >
-                                {angleConfig[lead.selectedMessageAngle].label}
-                            </span>
-                        </p>
-                    )}
-                </div>
-                <button
-                    onClick={generate}
-                    disabled={isLoading}
-                    className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
-                >
-                    {isLoading ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : messages.length > 0 ? (
-                        <RefreshCw className="w-3.5 h-3.5" />
-                    ) : (
-                        <Sparkles className="w-3.5 h-3.5" />
-                    )}
-                    {messages.length > 0
-                        ? "Regenerate"
-                        : "Generate 3 Variations"}
-                </button>
-            </div>
+         <div className="flex items-center justify-between">
+    <div className="space-y-0.5">
+        <h3 className="font-display font-semibold text-base-100">Message Generator</h3>
+        {lead.selectedMessageAngle && (
+            <p className="text-xs text-base-500">
+                Last used: <span className={angleConfig[lead.selectedMessageAngle].color}>
+                    {angleConfig[lead.selectedMessageAngle].label}
+                </span>
+            </p>
+        )}
+    </div>
+    <div className="flex items-center gap-2">
+        <span className="text-xs text-base-600">{remainingAiGenerations()} left today</span>
+        <button
+            onClick={generate}
+            disabled={isLoading}
+            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+        >
+            {isLoading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : messages.length > 0
+                    ? <RefreshCw className="w-3.5 h-3.5" />
+                    : <Sparkles className="w-3.5 h-3.5" />
+            }
+            {messages.length > 0 ? "Regenerate" : "Generate 3 Variations"}
+        </button>
+    </div>
+</div>
 
             {error && <p className="text-xs text-red-400">{error}</p>}
 

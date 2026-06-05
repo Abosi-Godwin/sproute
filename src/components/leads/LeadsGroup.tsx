@@ -87,7 +87,6 @@ function LeadsGrid({
                             paddingBottom: "16px"
                         }}
                     >
-                  
                         <LeadCard
                             key={leads[virtualItem.index].id}
                             lead={leads[virtualItem.index]}

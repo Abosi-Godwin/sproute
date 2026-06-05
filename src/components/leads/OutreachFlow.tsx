@@ -22,7 +22,7 @@ import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../utils/painPoints";
 import { scoreLead } from "../../utils/leadScore";
 
-
+import { useUsageStore, FREE_AI_LIMIT } from "../../lib/stores/useUsageStore";
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
@@ -104,7 +104,6 @@ function WABtn({ text, number }: { text: string; number?: string }) {
     );
 }
 
- 
 const TONE_MAP: Record<string, string> = {
     casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
     formal: "Professional and approachable Standard English. NOT Pidgin.",
@@ -115,8 +114,6 @@ const TONE_RULES = `- If tone is casual or formal, write in Standard English onl
 - If tone is pidgin, write entirely in Pidgin
 - Never mix tones`;
 
-
-
 const DAY14_CASUAL =
     "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
 const DAY14_PIDGIN =
@@ -126,6 +123,9 @@ const DAY14_FORMAL =
 
 function NoReplyTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
+    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } =
+        useUsageStore();
+
     const { saveFollowUpSequence } = useLeadsStore();
     const [sequence, setSequence] = useState<FollowUpSequence | null>(
         lead.followUpSequence ?? null
@@ -145,6 +145,13 @@ function NoReplyTab({ lead }: { lead: Lead }) {
               : DAY14_CASUAL;
 
     const generate = async () => {
+        resetIfNewDay();
+        if (!canGenerateAi(0)) {
+            toast.error(
+                `Daily AI limit reached (${FREE_AI_LIMIT}/day). Resets at midnight.`
+            );
+            return;
+        }
         setIsLoading(true);
         try {
             const raw = await callGemini(
@@ -191,6 +198,8 @@ Notes: ${lead.notes || "none"}`
             };
             setSequence(seq);
             await saveFollowUpSequence(lead.id, seq);
+            incrementAiGenerations();
+
             toast.success("Sequence generated");
         } catch {
             toast.error("Generation failed — try again");
@@ -305,7 +314,6 @@ Notes: ${lead.notes || "none"}`
         </div>
     );
 }
- 
 
 const SCENARIOS = [
     { id: "interested", label: "Interested" },
@@ -333,7 +341,8 @@ type ScenarioId =
 function getTemplate(
     scenario: ScenarioId,
     tone: "casual" | "formal" | "pidgin",
-    businessName: string
+    businessName: string,
+    portfolioUrl: string = ""
 ): string {
     const b = businessName;
     const templates: Record<
@@ -351,9 +360,9 @@ function getTemplate(
             pidgin: `E depend on wetin you need exactly. Once I understand your situation I go fit give you correct price. I fit ask small questions?`
         },
         show_example: {
-            casual: `Sure. Here is a quick example of the kind of website I build — simple, mobile-friendly, easy for customers to contact you from. Have a look and tell me what you think.`,
-            formal: `Of course. I would like to share a brief example of my work — clean, mobile-optimised, and designed to make it easy for customers to reach ${b}. Please have a look and share your thoughts.`,
-            pidgin: `Sure. Here na quick example of the kind of website I dey build — simple, e dey work well on phone, customers fit contact you easy. Take a look tell me wetin you think.`
+            casual: `Sure. Here is a quick example of the kind of website I build — simple, mobile-friendly, easy for customers to contact you from. Have a look: ${portfolioUrl || "[your portfolio link]"}`,
+            formal: `Of course. Here is a brief example of my work — clean, mobile-optimised, designed to make it easy for customers to reach you. Please have a look: ${portfolioUrl || "[your portfolio link]"}`,
+            pidgin: `Sure. Here na quick example of the kind of website I dey build — simple, e dey work well on phone. Take a look: ${portfolioUrl || "[your portfolio link]"}`
         },
         how_found: {
             casual: `I was looking through businesses in your area and came across ${b}. I noticed a few things that caught my attention — would you like me to share them?`,
@@ -388,15 +397,17 @@ function getTemplate(
     };
     return templates[scenario][tone];
 }
-
 function RepliedTab({ lead }: { lead: Lead }) {
-    const { outreachTone } = useSettingsStore();
+    const { outreachTone, portfolioUrl } = useSettingsStore();
+ 
     const [activeScenario, setActiveScenario] =
         useState<ScenarioId>("interested");
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const tone = outreachTone as "casual" | "formal" | "pidgin";
-    const text = getTemplate(activeScenario, tone, lead.name);
+
+    const text = getTemplate(activeScenario, tone, lead.name, portfolioUrl);
+
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
 
     const handleCopy = async (t: string, id: string) => {
@@ -442,10 +453,12 @@ function RepliedTab({ lead }: { lead: Lead }) {
         </div>
     );
 }
- 
 
 function ChatHelperTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
+    
+const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore();
+
     const { saveChatHistory } = useLeadsStore();
     const [input, setInput] = useState("");
     const [history, setHistory] = useState<ChatMessage[]>(
@@ -465,6 +478,11 @@ function ChatHelperTab({ lead }: { lead: Lead }) {
     }, [history, isLoading]);
 
     const handleSend = async () => {
+      resetIfNewDay();
+    if (!canGenerateAi(0)) {
+        toast.error(`Daily AI limit reached. Resets at midnight.`);
+        return;
+    }
         const trimmed = input.trim();
         if (!trimmed || isLoading) return;
 
@@ -530,6 +548,7 @@ ${TONE_RULES}`,
                 text: reply.trim(),
                 timestamp: new Date().toISOString()
             };
+            incrementAiGenerations()
             const finalHistory = [...updatedHistory, aiMsg];
             setHistory(finalHistory);
             await saveChatHistory(lead.id, finalHistory);
@@ -739,7 +758,6 @@ Return plain bullet points only. No headers. No intro sentence.`,
         </div>
     );
 }
- 
 
 export default function OutreachFlow({ lead }: { lead: Lead }) {
     const { setOutreachFlowTab } = useLeadsStore();

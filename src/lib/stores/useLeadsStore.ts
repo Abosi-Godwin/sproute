@@ -25,6 +25,7 @@ interface LeadsStore {
         sequence: FollowUpSequence
     ) => Promise<void>;
     saveChatHistory: (id: string, history: ChatMessage[]) => Promise<void>;
+    setDeadReason: (id: string, reason: DeadReason) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
     bulkDelete: (ids: string[]) => Promise<void>;
     logActivity: (
@@ -71,6 +72,7 @@ export const useLeadsStore = create<LeadsStore>()(
                         whatsappNumber: r.whatsapp_number,
                         painPoints: r.pain_points,
                         outreachFlowTab: r.outreach_flow_tab ?? "no_reply",
+                        deadReason: r.dead_reason,
                         chatHistory: r.chat_history ?? [],
                         savedAt: r.saved_at,
                         updatedAt: r.updated_at,
@@ -143,6 +145,7 @@ export const useLeadsStore = create<LeadsStore>()(
                     location: lead.location,
                     follow_up_date: followUpDateStr,
                     generated_message: lead.generatedMessage ?? null,
+                    dead_reason: null,
                     saved_at: lead.savedAt,
                     updated_at: lead.updatedAt,
                     search_query: lead.searchQuery ?? null,
@@ -346,6 +349,17 @@ export const useLeadsStore = create<LeadsStore>()(
                 await supabase
                     .from("leads")
                     .update({ chat_history: history })
+                    .eq("id", id);
+            },
+            setDeadReason: async (id, reason) => {
+                set(state => ({
+                    leads: state.leads.map(l =>
+                        l.id === id ? { ...l, deadReason: reason } : l
+                    )
+                }));
+                await supabase
+                    .from("leads")
+                    .update({ dead_reason: reason })
                     .eq("id", id);
             },
             deleteLead: async id => {

@@ -1,13 +1,17 @@
 export type LeadStatus =
-    | "new"
-    | "messaged"
-    | "replied"
-    | "converted"
-    | "dead"
-    | "not_on_whatsapp";
+    | "new" | "messaged" | "replied"
+    | "converted" | "dead" | "not_on_whatsapp";
 
 export type MessageAngle = "curiosity" | "friendly" | "direct";
 export type OutreachFlowTab = "no_reply" | "replied" | "chatHelper";
+
+export type DeadReason =
+    | "has_website"
+    | "not_interested"
+    | "wrong_number"
+    | "no_response"
+    | "too_expensive"
+    | "other";
 
 export interface LeadPainPoints {
     noWebsite: boolean;
@@ -51,6 +55,7 @@ export interface Lead {
     outreachFlowTab?: OutreachFlowTab;
     followUpSequence?: FollowUpSequence;
     chatHistory?: ChatMessage[];
+    deadReason?: DeadReason;
     savedAt: string;
     updatedAt: string;
     searchQuery?: string;

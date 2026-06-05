@@ -1,42 +1,20 @@
-export interface GeocodeResult {
-    ll: string;
-    displayName: string;
-}
-
-export async function geocodeLocation(
-    location: string
-): Promise<GeocodeResult> {
-    const query = `${location}, Nigeria`;
-    const params = new URLSearchParams({
-        q: query,
-        format: "json",
-        limit: "1"
-    });
-
+export async function geocodeLocation(location: string): Promise<{ ll: string; label: string }> {
+    const encoded = encodeURIComponent(location);
     const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params}`,
-        {
-            headers: {
-                "Accept-Language": "en",
-                "User-Agent": "Sproute/1.0"
-            }
-        }
+        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
     );
 
-    if (!res.ok) throw new Error("Geocoding service unavailable.");
+    if (!res.ok) throw new Error('Could not reach location service');
 
     const data = await res.json();
-
-    if (!data.length) {
-        throw new Error(
-            "Location not found. Try being more specific e.g. Warri, Delta State."
-        );
+    if (!data || data.length === 0) {
+        throw new Error(`Could not find "${location}" — try a different spelling or add the country name`);
     }
 
-    const { lat, lon, display_name } = data[0];
-
+    const { lat, lon } = data[0];
     return {
         ll: `@${lat},${lon},14z`,
-        displayName: display_name
+        label: location,
     };
 }
