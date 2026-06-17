@@ -12,7 +12,7 @@ import { painPointsToContext } from "../../utils/painPoints";
 import { scoreLead } from "../../utils/leadScore";
 import { useUsageStore } from "../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
-import UpgradeModal from "../UpgradeModal";
+import UpgradeModal from "../ui/UpgradeModal";
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 

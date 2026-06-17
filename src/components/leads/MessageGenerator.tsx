@@ -12,7 +12,7 @@ import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { useUsageStore } from "../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
-import UpgradeModal from "../UpgradeModal";
+import UpgradeModal from "../ui/UpgradeModal";
 import { clsx } from "clsx";
 import toast from "react-hot-toast";
 
