@@ -7,7 +7,7 @@ import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useUsageStore, FREE_LEADS_LIMIT } from "../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
-import UpgradeModal from "../UpgradeModal";
+import UpgradeModal from "../ui/UpgradeModal";
 import {
     scoreSearchResult, getTier,
     tierConfig, getOpportunityReasons
