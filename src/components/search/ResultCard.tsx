@@ -5,14 +5,14 @@ import {
 } from "lucide-react";
 import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
-import { useUsageStore, FREE_LEADS_LIMIT } from
-'../../lib/stores/useUsageStore';
+import { useUsageStore, FREE_LEADS_LIMIT } from "../../lib/stores/useUsageStore";
+import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
+import UpgradeModal from "../UpgradeModal";
 import {
     scoreSearchResult, getTier,
     tierConfig, getOpportunityReasons
 } from "../../utils/leadScore";
 import { clsx } from "clsx";
-import toast from "react-hot-toast";
 
 interface ResultCardProps {
     result: SearchResult;
@@ -23,14 +23,19 @@ interface ResultCardProps {
 export default function ResultCard({ result, searchQuery, searchLocation }: ResultCardProps) {
     const { leads, saveLead } = useLeadsStore();
     const [isSaving, setIsSaving] = useState(false);
+    const [showUpgrade, setShowUpgrade] = useState(false);
 
     const existingLead = leads.find(l => l.placeId === result.placeId);
     const score = scoreSearchResult(result);
     const tier = getTier(score);
     const tConf = tierConfig[tier];
     const reasons = getOpportunityReasons(result);
-const { isLeadsLimitReached } = useUsageStore();
-const limitReached = isLeadsLimitReached(leads.length);
+
+    const { isLeadsLimitReached } = useUsageStore();
+    const { isPro } = useSubscriptionStore();
+    const pro = isPro();
+    const limitReached = isLeadsLimitReached(leads.length, pro);
+
     const handleSave = async () => {
         if (existingLead || isSaving) return;
         setIsSaving(true);
@@ -57,7 +62,6 @@ const limitReached = isLeadsLimitReached(leads.length);
 
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3 hover:border-base-700 transition-colors">
-            {/* Header */}
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                     <p className="font-display font-semibold text-base-50 leading-snug truncate">
@@ -77,17 +81,15 @@ const limitReached = isLeadsLimitReached(leads.length);
                     </div>
                 </div>
 
-                {/* Tier + Score */}
                 <div className={clsx(
-                    'flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0',
+                    "flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0",
                     tConf.bg
                 )}>
-                    <TrendingUp className={clsx('w-3 h-3', tConf.color)} />
-                    <span className={clsx('text-xs font-semibold', tConf.color)}>{score}</span>
+                    <TrendingUp className={clsx("w-3 h-3", tConf.color)} />
+                    <span className={clsx("text-xs font-semibold", tConf.color)}>{score}</span>
                 </div>
             </div>
 
-            {/* Badge strip */}
             {result.unclaimedListing && (
                 <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-yellow-400 bg-yellow-500/10">
@@ -97,21 +99,16 @@ const limitReached = isLeadsLimitReached(leads.length);
                 </div>
             )}
 
-            {/* Opportunity reasons — hot and warm only */}
-            {tier !== 'low' && reasons.length > 0 && (
+            {tier !== "low" && reasons.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                     {reasons.slice(0, 2).map((reason, i) => (
-                        <span
-                            key={i}
-                            className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md"
-                        >
+                        <span key={i} className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md">
                             ✓ {reason}
                         </span>
                     ))}
                 </div>
             )}
 
-            {/* Details */}
             <div className="space-y-1.5">
                 <div className="flex items-center gap-2 text-xs text-base-400">
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
@@ -132,27 +129,28 @@ const limitReached = isLeadsLimitReached(leads.length);
                 </div>
             </div>
 
-            {/* Action */}
-          
+            {existingLead ? (
+                <span className="text-xs text-center py-2 rounded-lg bg-base-800 text-base-400 capitalize">
+                    {existingLead.status.replace(/_/g, " ")}
+                </span>
+            ) : limitReached ? (
+                <button
+                    onClick={() => setShowUpgrade(true)}
+                    className="text-xs text-center py-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
+                >
+                    Free limit reached — Upgrade
+                </button>
+            ) : (
+                <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="text-xs font-medium py-2 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 disabled:opacity-50 transition-colors"
+                >
+                    {isSaving ? "Saving..." : "Save Lead"}
+                </button>
+            )}
 
-
-{existingLead ? (
-    <span className="text-xs text-center py-2 rounded-lg bg-base-800 text-base-400 capitalize">
-        {existingLead.status.replace(/_/g, " ")}
-    </span>
-) : limitReached ? (
-    <div className="text-xs text-center py-2 rounded-lg bg-orange-500/10 text-orange-400">
-        Free limit reached ({FREE_LEADS_LIMIT} leads)
-    </div>
-) : (
-    <button
-        onClick={handleSave}
-        disabled={isSaving}
-        className="text-xs font-medium py-2 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 disabled:opacity-50 transition-colors"
-    >
-        {isSaving ? "Saving..." : "Save Lead"}
-    </button>
-)}
+            {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </div>
     );
 }

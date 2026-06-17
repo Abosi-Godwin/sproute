@@ -1,42 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import {
-    MessageCircle,
-    Loader2,
-    Sparkles,
-    Copy,
-    Check,
-    RefreshCw,
-    Send,
-    Trash2
+    MessageCircle, Loader2, Sparkles,
+    Copy, Check, RefreshCw, Send, Trash2
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { clsx } from "clsx";
-import {
-    Lead,
-    OutreachFlowTab,
-    FollowUpSequence,
-    ChatMessage
-} from "../../types";
+import { Lead, OutreachFlowTab, FollowUpSequence, ChatMessage } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../utils/painPoints";
 import { scoreLead } from "../../utils/leadScore";
-
-import { useUsageStore, FREE_AI_LIMIT } from "../../lib/stores/useUsageStore";
+import { useUsageStore } from "../../lib/stores/useUsageStore";
+import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
+import UpgradeModal from "../UpgradeModal";
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
-async function callGemini(
-    systemText: string,
-    userText: string
-): Promise<string> {
+async function callGemini(systemText: string, userText: string): Promise<string> {
     const res = await fetch(GEMINI_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemText }] },
-            contents: [{ parts: [{ text: userText }] }]
-        })
+            contents: [{ parts: [{ text: userText }] }],
+        }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message ?? "Failed");
@@ -56,12 +43,7 @@ async function copyText(text: string) {
     }
 }
 
-function CopyBtn({
-    text,
-    id,
-    copiedId,
-    onCopy
-}: {
+function CopyBtn({ text, id, copiedId, onCopy }: {
     text: string;
     id: string;
     copiedId: string | null;
@@ -72,15 +54,10 @@ function CopyBtn({
             onClick={() => onCopy(text, id)}
             className="flex items-center gap-1.5 flex-1 justify-center text-xs font-medium px-3 py-2 rounded-lg bg-base-800 text-base-300 hover:text-base-100 hover:bg-base-700 transition-colors"
         >
-            {copiedId === id ? (
-                <>
-                    <Check className="w-3.5 h-3.5 text-brand-400" /> Copied
-                </>
-            ) : (
-                <>
-                    <Copy className="w-3.5 h-3.5" /> Copy
-                </>
-            )}
+            {copiedId === id
+                ? <><Check className="w-3.5 h-3.5 text-brand-400" /> Copied</>
+                : <><Copy className="w-3.5 h-3.5" /> Copy</>
+            }
         </button>
     );
 }
@@ -91,10 +68,7 @@ function WABtn({ text, number }: { text: string; number?: string }) {
         <button
             onClick={() => {
                 const clean = number.replace(/\D/g, "");
-                window.open(
-                    `https://wa.me/${clean}?text=${encodeURIComponent(text)}`,
-                    "_blank"
-                );
+                window.open(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`, "_blank");
             }}
             className="flex items-center gap-1.5 flex-1 justify-center text-xs font-medium px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
         >
@@ -107,49 +81,40 @@ function WABtn({ text, number }: { text: string; number?: string }) {
 const TONE_MAP: Record<string, string> = {
     casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
     formal: "Professional and approachable Standard English. NOT Pidgin.",
-    pidgin: "Natural Nigerian Pidgin English throughout — every sentence in Pidgin."
+    pidgin: "Natural Nigerian Pidgin English throughout — every sentence in Pidgin.",
 };
 
 const TONE_RULES = `- If tone is casual or formal, write in Standard English only — no Pidgin words or phrases
 - If tone is pidgin, write entirely in Pidgin
 - Never mix tones`;
 
-const DAY14_CASUAL =
-    "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
-const DAY14_PIDGIN =
-    "I go leave am here for now. Anytime you wan revisit am, just reach out — I dey.";
-const DAY14_FORMAL =
-    "I understand you may be occupied. Please do not hesitate to reach out whenever you are ready to explore this further.";
+const DAY14_CASUAL = "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
+const DAY14_PIDGIN = "I go leave am here for now. Anytime you wan revisit am, just reach out — I dey.";
+const DAY14_FORMAL = "I understand you may be occupied. Please do not hesitate to reach out whenever you are ready to explore this further.";
 
 function NoReplyTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
-    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } =
-        useUsageStore();
+    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore();
+    const { isPro } = useSubscriptionStore();
+    const pro = isPro();
 
     const { saveFollowUpSequence } = useLeadsStore();
-    const [sequence, setSequence] = useState<FollowUpSequence | null>(
-        lead.followUpSequence ?? null
-    );
+    const [sequence, setSequence] = useState<FollowUpSequence | null>(lead.followUpSequence ?? null);
     const [isLoading, setIsLoading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [showUpgrade, setShowUpgrade] = useState(false);
 
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
-    const painContext = lead.painPoints
-        ? painPointsToContext(lead.painPoints)
-        : "No specific signals";
+    const painContext = lead.painPoints ? painPointsToContext(lead.painPoints) : "No specific signals";
     const day14 =
-        outreachTone === "pidgin"
-            ? DAY14_PIDGIN
-            : outreachTone === "formal"
-              ? DAY14_FORMAL
-              : DAY14_CASUAL;
+        outreachTone === "pidgin" ? DAY14_PIDGIN :
+        outreachTone === "formal" ? DAY14_FORMAL :
+        DAY14_CASUAL;
 
     const generate = async () => {
         resetIfNewDay();
-        if (!canGenerateAi(0)) {
-            toast.error(
-                `Daily AI limit reached (${FREE_AI_LIMIT}/day). Resets at midnight.`
-            );
+        if (!canGenerateAi(pro)) {
+            setShowUpgrade(true);
             return;
         }
         setIsLoading(true);
@@ -192,14 +157,10 @@ Notes: ${lead.notes || "none"}`
 
             const clean = raw.replace(/```json|```/g, "").trim();
             const parsed = JSON.parse(clean);
-            const seq: FollowUpSequence = {
-                day3: parsed.day3,
-                day7: parsed.day7
-            };
+            const seq: FollowUpSequence = { day3: parsed.day3, day7: parsed.day7 };
             setSequence(seq);
             await saveFollowUpSequence(lead.id, seq);
             incrementAiGenerations();
-
             toast.success("Sequence generated");
         } catch {
             toast.error("Generation failed — try again");
@@ -215,35 +176,18 @@ Notes: ${lead.notes || "none"}`
         toast.success("Copied");
     };
 
-    const messages = sequence
-        ? [
-              {
-                  id: "day3",
-                  label: "Day 3 — Check in",
-                  text: sequence.day3,
-                  isStatic: false
-              },
-              {
-                  id: "day7",
-                  label: "Day 7 — Add value",
-                  text: sequence.day7,
-                  isStatic: false
-              },
-              {
-                  id: "day14",
-                  label: "Day 14 — Final message",
-                  text: day14,
-                  isStatic: true
-              }
-          ]
-        : [];
+    const messages = sequence ? [
+        { id: "day3", label: "Day 3 — Check in", text: sequence.day3, isStatic: false },
+        { id: "day7", label: "Day 7 — Add value", text: sequence.day7, isStatic: false },
+        { id: "day14", label: "Day 14 — Final message", text: day14, isStatic: true },
+    ] : [];
 
     return (
         <div className="space-y-4">
             <p className="text-xs text-base-500">
-                No reply yet. Generate follow-ups for day 3 and 7. Day 7
-                references this business's specific signals. Day 14 is always a
-                graceful exit.
+                No reply yet. Generate follow-ups for day 3 and 7.
+                Day 7 references this business's specific signals.
+                Day 14 is always a graceful exit.
             </p>
 
             <button
@@ -251,22 +195,19 @@ Notes: ${lead.notes || "none"}`
                 disabled={isLoading}
                 className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition-colors"
             >
-                {isLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : sequence ? (
-                    <RefreshCw className="w-3.5 h-3.5" />
-                ) : (
-                    <Sparkles className="w-3.5 h-3.5" />
-                )}
+                {isLoading
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : sequence
+                        ? <RefreshCw className="w-3.5 h-3.5" />
+                        : <Sparkles className="w-3.5 h-3.5" />
+                }
                 {sequence ? "Regenerate" : "Generate Sequence"}
             </button>
 
             {isLoading && (
                 <div className="flex items-center gap-2 py-4 justify-center">
                     <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                    <p className="text-xs text-base-500">
-                        Generating follow-up sequence...
-                    </p>
+                    <p className="text-xs text-base-500">Generating follow-up sequence...</p>
                 </div>
             )}
 
@@ -277,40 +218,24 @@ Notes: ${lead.notes || "none"}`
                             key={msg.id}
                             className={clsx(
                                 "border rounded-xl p-4 space-y-3",
-                                msg.isStatic
-                                    ? "border-base-800 opacity-70"
-                                    : "border-base-800"
+                                msg.isStatic ? "border-base-800 opacity-70" : "border-base-800"
                             )}
                         >
                             <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold text-base-400">
-                                    {msg.label}
-                                </p>
-                                {msg.isStatic && (
-                                    <span className="text-xs text-base-600">
-                                        Static
-                                    </span>
-                                )}
+                                <p className="text-xs font-semibold text-base-400">{msg.label}</p>
+                                {msg.isStatic && <span className="text-xs text-base-600">Static</span>}
                             </div>
-                            <p className="text-sm text-base-200 leading-relaxed">
-                                {msg.text}
-                            </p>
+                            <p className="text-sm text-base-200 leading-relaxed">{msg.text}</p>
                             <div className="flex items-center gap-2">
-                                <CopyBtn
-                                    text={msg.text}
-                                    id={msg.id}
-                                    copiedId={copiedId}
-                                    onCopy={handleCopy}
-                                />
-                                <WABtn
-                                    text={msg.text}
-                                    number={whatsappNumber}
-                                />
+                                <CopyBtn text={msg.text} id={msg.id} copiedId={copiedId} onCopy={handleCopy} />
+                                <WABtn text={msg.text} number={whatsappNumber} />
                             </div>
                         </div>
                     ))}
                 </div>
             )}
+
+            {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </div>
     );
 }
@@ -324,19 +249,13 @@ const SCENARIOS = [
     { id: "need_time", label: "Need time to think" },
     { id: "not_now", label: "Not now" },
     { id: "not_interested", label: "Not interested" },
-    { id: "autoreply", label: "Auto-reply" }
+    { id: "autoreply", label: "Auto-reply" },
 ];
 
 type ScenarioId =
-    | "interested"
-    | "asked_price"
-    | "show_example"
-    | "how_found"
-    | "has_website"
-    | "need_time"
-    | "not_now"
-    | "not_interested"
-    | "autoreply";
+    | "interested" | "asked_price" | "show_example"
+    | "how_found" | "has_website" | "need_time"
+    | "not_now" | "not_interested" | "autoreply";
 
 function getTemplate(
     scenario: ScenarioId,
@@ -345,69 +264,63 @@ function getTemplate(
     portfolioUrl: string = ""
 ): string {
     const b = businessName;
-    const templates: Record<
-        ScenarioId,
-        Record<"casual" | "formal" | "pidgin", string>
-    > = {
+    const templates: Record<ScenarioId, Record<"casual" | "formal" | "pidgin", string>> = {
         interested: {
             casual: `Nice one! Let me send you a quick example so you can see the direction clearly. What works for you — today or tomorrow?`,
             formal: `Thank you for your interest. I would love to share a brief overview of what I have in mind for ${b}. Would today or tomorrow work for a quick look?`,
-            pidgin: `Nice one! Make I send you quick example so you fit see the direction well. Today or tomorrow go work for you?`
+            pidgin: `Nice one! Make I send you quick example so you fit see the direction well. Today or tomorrow go work for you?`,
         },
         asked_price: {
             casual: `Depends on exactly what you need. Once I understand your situation I can give you an accurate number. Can I ask a few quick questions?`,
             formal: `The cost depends on the scope of work. I would like to ask a few questions first to give ${b} the most accurate figure. Would that be alright?`,
-            pidgin: `E depend on wetin you need exactly. Once I understand your situation I go fit give you correct price. I fit ask small questions?`
+            pidgin: `E depend on wetin you need exactly. Once I understand your situation I go fit give you correct price. I fit ask small questions?`,
         },
         show_example: {
             casual: `Sure. Here is a quick example of the kind of website I build — simple, mobile-friendly, easy for customers to contact you from. Have a look: ${portfolioUrl || "[your portfolio link]"}`,
             formal: `Of course. Here is a brief example of my work — clean, mobile-optimised, designed to make it easy for customers to reach you. Please have a look: ${portfolioUrl || "[your portfolio link]"}`,
-            pidgin: `Sure. Here na quick example of the kind of website I dey build — simple, e dey work well on phone. Take a look: ${portfolioUrl || "[your portfolio link]"}`
+            pidgin: `Sure. Here na quick example of the kind of website I dey build — simple, e dey work well on phone. Take a look: ${portfolioUrl || "[your portfolio link]"}`,
         },
         how_found: {
             casual: `I was looking through businesses in your area and came across ${b}. I noticed a few things that caught my attention — would you like me to share them?`,
             formal: `I came across ${b} while looking through local businesses in your area and noticed a few things worth mentioning. Would you be open to hearing them?`,
-            pidgin: `I dey look through businesses for your area and I see ${b}. I notice some things wey catch my eye — you wan make I share them with you?`
+            pidgin: `I dey look through businesses for your area and I see ${b}. I notice some things wey catch my eye — you wan make I share them with you?`,
         },
         has_website: {
             casual: `Got it. Out of curiosity, is it doing well for you — are you getting inquiries or bookings through it regularly?`,
             formal: `Understood. May I ask how well the current website is performing for ${b}? Is it generating inquiries or bookings consistently?`,
-            pidgin: `I hear you. I just wan ask — the website dey bring customers or inquiries for ${b} regularly?`
+            pidgin: `I hear you. I just wan ask — the website dey bring customers or inquiries for ${b} regularly?`,
         },
         need_time: {
             casual: `No problem. When would be a good time for me to follow up — next week or the week after?`,
             formal: `Of course, take all the time you need. When would it be convenient for me to check back with you?`,
-            pidgin: `No wahala. When go be better time make I check back with you — next week or the one after?`
+            pidgin: `No wahala. When go be better time make I check back with you — next week or the one after?`,
         },
         not_now: {
             casual: `No problem at all. Whenever the time is right, just reach out and we will continue from there.`,
             formal: `Absolutely understood. Please feel free to reach out whenever you are ready and we can take it from there.`,
-            pidgin: `No wahala at all. Anytime the time don reach, just message me make we continue from there.`
+            pidgin: `No wahala at all. Anytime the time don reach, just message me make we continue from there.`,
         },
         not_interested: {
             casual: `No worries at all. Thanks for getting back to me. If anything changes down the line, feel free to reach out. Wishing ${b} all the best.`,
             formal: `Absolutely understood. Thank you for letting me know. Should circumstances change in the future, please do not hesitate to reach out.`,
-            pidgin: `No wahala at all. Thanks for replying. If anything change for future, just reach out. I dey wish ${b} all the best.`
+            pidgin: `No wahala at all. Thanks for replying. If anything change for future, just reach out. I dey wish ${b} all the best.`,
         },
         autoreply: {
             casual: `Thanks. Whenever a real person from ${b} sees this, I would love to share a quick idea. No rush at all.`,
             formal: `Thank you for the response. Whenever a member of the ${b} team is available, I would be happy to share a brief idea. No urgency.`,
-            pidgin: `Thanks. Anytime real person from ${b} see this message, I go love share quick idea. No rush at all.`
-        }
+            pidgin: `Thanks. Anytime real person from ${b} see this message, I go love share quick idea. No rush at all.`,
+        },
     };
     return templates[scenario][tone];
 }
+
 function RepliedTab({ lead }: { lead: Lead }) {
     const { outreachTone, portfolioUrl } = useSettingsStore();
- 
-    const [activeScenario, setActiveScenario] =
-        useState<ScenarioId>("interested");
+    const [activeScenario, setActiveScenario] = useState<ScenarioId>("interested");
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const tone = outreachTone as "casual" | "formal" | "pidgin";
-
     const text = getTemplate(activeScenario, tone, lead.name, portfolioUrl);
-
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
 
     const handleCopy = async (t: string, id: string) => {
@@ -441,12 +354,7 @@ function RepliedTab({ lead }: { lead: Lead }) {
             <div className="border border-base-800 rounded-xl p-4 space-y-3">
                 <p className="text-sm text-base-200 leading-relaxed">{text}</p>
                 <div className="flex items-center gap-2">
-                    <CopyBtn
-                        text={text}
-                        id={activeScenario}
-                        copiedId={copiedId}
-                        onCopy={handleCopy}
-                    />
+                    <CopyBtn text={text} id={activeScenario} copiedId={copiedId} onCopy={handleCopy} />
                     <WABtn text={text} number={whatsappNumber} />
                 </div>
             </div>
@@ -456,21 +364,19 @@ function RepliedTab({ lead }: { lead: Lead }) {
 
 function ChatHelperTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
-    
-const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore();
+    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore();
+    const { isPro } = useSubscriptionStore();
+    const pro = isPro();
 
     const { saveChatHistory } = useLeadsStore();
     const [input, setInput] = useState("");
-    const [history, setHistory] = useState<ChatMessage[]>(
-        lead.chatHistory ?? []
-    );
+    const [history, setHistory] = useState<ChatMessage[]>(lead.chatHistory ?? []);
     const [isLoading, setIsLoading] = useState(false);
     const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+    const [showUpgrade, setShowUpgrade] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
     const whatsappNumber = lead.whatsappNumber ?? lead.phone;
-    const painContext = lead.painPoints
-        ? painPointsToContext(lead.painPoints)
-        : "No specific signals";
+    const painContext = lead.painPoints ? painPointsToContext(lead.painPoints) : "No specific signals";
     const score = scoreLead(lead);
 
     useEffect(() => {
@@ -478,18 +384,19 @@ const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore()
     }, [history, isLoading]);
 
     const handleSend = async () => {
-      resetIfNewDay();
-    if (!canGenerateAi(0)) {
-        toast.error(`Daily AI limit reached. Resets at midnight.`);
-        return;
-    }
+        resetIfNewDay();
+        if (!canGenerateAi(pro)) {
+            setShowUpgrade(true);
+            return;
+        }
+
         const trimmed = input.trim();
         if (!trimmed || isLoading) return;
 
         const newMsg: ChatMessage = {
             role: "prospect",
             text: trimmed,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
         };
         const updatedHistory = [...history, newMsg];
         setHistory(updatedHistory);
@@ -498,10 +405,7 @@ const { canGenerateAi, incrementAiGenerations, resetIfNewDay } = useUsageStore()
 
         try {
             const conversationContext = updatedHistory
-                .map(
-                    m =>
-                        `${m.role === "prospect" ? "Prospect" : "You (suggested)"}: ${m.text}`
-                )
+                .map(m => `${m.role === "prospect" ? "Prospect" : "You (suggested)"}: ${m.text}`)
                 .join("\n");
 
             const reply = await callGemini(
@@ -546,12 +450,12 @@ ${TONE_RULES}`,
             const aiMsg: ChatMessage = {
                 role: "suggested",
                 text: reply.trim(),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
             };
-            incrementAiGenerations()
             const finalHistory = [...updatedHistory, aiMsg];
             setHistory(finalHistory);
             await saveChatHistory(lead.id, finalHistory);
+            incrementAiGenerations();
         } catch {
             toast.error("Could not generate reply — try again");
             setHistory(updatedHistory);
@@ -576,9 +480,7 @@ ${TONE_RULES}`,
     const generateSummary = async () => {
         if (history.length < 4) return;
         const conversationText = history
-            .map(
-                m => `${m.role === "prospect" ? "Prospect" : "You"}: ${m.text}`
-            )
+            .map(m => `${m.role === "prospect" ? "Prospect" : "You"}: ${m.text}`)
             .join("\n");
         try {
             const raw = await callGemini(
@@ -621,7 +523,6 @@ Return plain bullet points only. No headers. No intro sentence.`,
                 </div>
             </div>
 
-            {/* Chat window */}
             <div className="bg-base-950 rounded-xl p-3 space-y-3 min-h-32 max-h-96 overflow-y-auto">
                 {history.length === 0 && (
                     <p className="text-xs text-base-600 text-center py-6">
@@ -632,68 +533,37 @@ Return plain bullet points only. No headers. No intro sentence.`,
                 {history.map((msg, idx) => (
                     <div
                         key={idx}
-                        className={clsx(
-                            "flex",
-                            msg.role === "prospect"
-                                ? "justify-end"
-                                : "justify-start"
-                        )}
+                        className={clsx("flex", msg.role === "prospect" ? "justify-end" : "justify-start")}
                     >
-                        <div
-                            className={clsx(
-                                "max-w-xs rounded-2xl px-3 py-2 space-y-1.5",
-                                msg.role === "prospect"
-                                    ? "bg-brand-500/20 rounded-tr-sm"
-                                    : "bg-base-800 rounded-tl-sm"
-                            )}
-                        >
-                            <p
-                                className={clsx(
-                                    "text-xs leading-relaxed",
-                                    msg.role === "prospect"
-                                        ? "text-brand-200"
-                                        : "text-base-100"
-                                )}
-                            >
+                        <div className={clsx(
+                            "max-w-xs rounded-2xl px-3 py-2 space-y-1.5",
+                            msg.role === "prospect" ? "bg-brand-500/20 rounded-tr-sm" : "bg-base-800 rounded-tl-sm"
+                        )}>
+                            <p className={clsx(
+                                "text-xs leading-relaxed",
+                                msg.role === "prospect" ? "text-brand-200" : "text-base-100"
+                            )}>
                                 {msg.text}
                             </p>
 
                             {msg.role === "suggested" && (
                                 <div className="flex items-center gap-1.5 pt-1 border-t border-base-700">
                                     <button
-                                        onClick={() =>
-                                            handleCopy(msg.text, idx)
-                                        }
+                                        onClick={() => handleCopy(msg.text, idx)}
                                         className="flex items-center gap-1 text-xs text-base-500 hover:text-base-300 transition-colors"
                                     >
-                                        {copiedIdx === idx ? (
-                                            <>
-                                                <Check className="w-3 h-3 text-brand-400" />{" "}
-                                                Copied
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Copy className="w-3 h-3" />{" "}
-                                                Copy
-                                            </>
-                                        )}
+                                        {copiedIdx === idx
+                                            ? <><Check className="w-3 h-3 text-brand-400" /> Copied</>
+                                            : <><Copy className="w-3 h-3" /> Copy</>
+                                        }
                                     </button>
                                     {whatsappNumber && (
                                         <>
-                                            <span className="text-base-700">
-                                                ·
-                                            </span>
+                                            <span className="text-base-700">·</span>
                                             <button
                                                 onClick={() => {
-                                                    const clean =
-                                                        whatsappNumber.replace(
-                                                            /\D/g,
-                                                            ""
-                                                        );
-                                                    window.open(
-                                                        `https://wa.me/${clean}?text=${encodeURIComponent(msg.text)}`,
-                                                        "_blank"
-                                                    );
+                                                    const clean = whatsappNumber.replace(/\D/g, "");
+                                                    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg.text)}`, "_blank");
                                                 }}
                                                 className="flex items-center gap-1 text-xs text-green-500 hover:text-green-400 transition-colors"
                                             >
@@ -712,18 +582,9 @@ Return plain bullet points only. No headers. No intro sentence.`,
                     <div className="flex justify-start">
                         <div className="bg-base-800 rounded-2xl rounded-tl-sm px-4 py-3">
                             <div className="flex items-center gap-1">
-                                <span
-                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
-                                    style={{ animationDelay: "0ms" }}
-                                />
-                                <span
-                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
-                                    style={{ animationDelay: "150ms" }}
-                                />
-                                <span
-                                    className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce"
-                                    style={{ animationDelay: "300ms" }}
-                                />
+                                <span className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                <span className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                <span className="w-1.5 h-1.5 bg-base-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                             </div>
                         </div>
                     </div>
@@ -732,7 +593,6 @@ Return plain bullet points only. No headers. No intro sentence.`,
                 <div ref={bottomRef} />
             </div>
 
-            {/* Input */}
             <div className="flex items-end gap-2">
                 <textarea
                     value={input}
@@ -755,6 +615,8 @@ Return plain bullet points only. No headers. No intro sentence.`,
                     <Send className="w-4 h-4" />
                 </button>
             </div>
+
+            {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </div>
     );
 }
@@ -782,9 +644,7 @@ export default function OutreachFlow({ lead }: { lead: Lead }) {
                     </h3>
                     {activeTab !== "no_reply" && (
                         <span className="text-xs text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full">
-                            {activeTab === "replied"
-                                ? "They Replied"
-                                : "Chat Helper"}
+                            {activeTab === "replied" ? "They Replied" : "Chat Helper"}
                         </span>
                     )}
                 </div>
@@ -799,13 +659,11 @@ export default function OutreachFlow({ lead }: { lead: Lead }) {
                         {[
                             { id: "no_reply", label: "No Reply" },
                             { id: "replied", label: "Replied" },
-                            { id: "chatHelper", label: "Chat Helper" }
+                            { id: "chatHelper", label: "Chat Helper" },
                         ].map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() =>
-                                    handleTabChange(tab.id as OutreachFlowTab)
-                                }
+                                onClick={() => handleTabChange(tab.id as OutreachFlowTab)}
                                 className={clsx(
                                     "flex-1 text-xs font-medium py-2 rounded-lg transition-colors",
                                     activeTab === tab.id
@@ -820,9 +678,7 @@ export default function OutreachFlow({ lead }: { lead: Lead }) {
 
                     {activeTab === "no_reply" && <NoReplyTab lead={lead} />}
                     {activeTab === "replied" && <RepliedTab lead={lead} />}
-                    {activeTab === "chatHelper" && (
-                        <ChatHelperTab lead={lead} />
-                    )}
+                    {activeTab === "chatHelper" && <ChatHelperTab lead={lead} />}
                 </div>
             )}
         </div>

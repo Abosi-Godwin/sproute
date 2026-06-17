@@ -1,16 +1,17 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 const FREE_AI_LIMIT = 10;
+const PRO_AI_LIMIT = 50;
 const FREE_LEADS_LIMIT = 50;
 
 interface UsageStore {
     aiGenerationsToday: number;
     lastGenerationDate: string | null;
     incrementAiGenerations: () => void;
-    canGenerateAi: (totalLeads: number) => boolean;
-    remainingAiGenerations: () => number;
-    isLeadsLimitReached: (totalLeads: number) => boolean;
+    canGenerateAi: (isPro: boolean) => boolean;
+    remainingAiGenerations: (isPro: boolean) => number;
+    isLeadsLimitReached: (totalLeads: number, isPro: boolean) => boolean;
     resetIfNewDay: () => void;
 }
 
@@ -21,7 +22,7 @@ export const useUsageStore = create<UsageStore>()(
             lastGenerationDate: null,
 
             resetIfNewDay: () => {
-                const today = new Date().toISOString().split("T")[0];
+                const today = new Date().toISOString().split('T')[0];
                 const { lastGenerationDate } = get();
                 if (lastGenerationDate !== today) {
                     set({ aiGenerationsToday: 0, lastGenerationDate: today });
@@ -29,7 +30,7 @@ export const useUsageStore = create<UsageStore>()(
             },
 
             incrementAiGenerations: () => {
-                const today = new Date().toISOString().split("T")[0];
+                const today = new Date().toISOString().split('T')[0];
                 const { lastGenerationDate, aiGenerationsToday } = get();
                 if (lastGenerationDate !== today) {
                     set({ aiGenerationsToday: 1, lastGenerationDate: today });
@@ -38,26 +39,29 @@ export const useUsageStore = create<UsageStore>()(
                 }
             },
 
-            canGenerateAi: () => {
+            canGenerateAi: (isPro) => {
                 const { aiGenerationsToday, lastGenerationDate } = get();
-                const today = new Date().toISOString().split("T")[0];
+                const today = new Date().toISOString().split('T')[0];
+                const limit = isPro ? PRO_AI_LIMIT : FREE_AI_LIMIT;
                 if (lastGenerationDate !== today) return true;
-                return aiGenerationsToday < FREE_AI_LIMIT;
+                return aiGenerationsToday < limit;
             },
 
-            remainingAiGenerations: () => {
+            remainingAiGenerations: (isPro) => {
                 const { aiGenerationsToday, lastGenerationDate } = get();
-                const today = new Date().toISOString().split("T")[0];
-                if (lastGenerationDate !== today) return FREE_AI_LIMIT;
-                return Math.max(0, FREE_AI_LIMIT - aiGenerationsToday);
+                const today = new Date().toISOString().split('T')[0];
+                const limit = isPro ? PRO_AI_LIMIT : FREE_AI_LIMIT;
+                if (lastGenerationDate !== today) return limit;
+                return Math.max(0, limit - aiGenerationsToday);
             },
 
-            isLeadsLimitReached: (totalLeads: number) => {
+            isLeadsLimitReached: (totalLeads, isPro) => {
+                if (isPro) return false;
                 return totalLeads >= FREE_LEADS_LIMIT;
-            }
+            },
         }),
-        { name: "sproute-usage" }
+        { name: 'sproute-usage' }
     )
 );
 
-export { FREE_AI_LIMIT, FREE_LEADS_LIMIT };
+export { FREE_AI_LIMIT, PRO_AI_LIMIT, FREE_LEADS_LIMIT };
