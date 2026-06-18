@@ -108,7 +108,13 @@ function NoReplyTab({ lead }: { lead: Lead }) {
     const pro = isPro();
 
     const { saveFollowUpSequence } = useLeadsStore();
-    const [sequence, setSequence] = useState<FollowUpSequence | null>(lead.followUpSequence ?? null);
+    
+    const [sequence, setSequence] = useState<FollowUpSequence | null>(() => {
+    const s = lead.followUpSequence;
+    if (!s || !s.day3 || !s.day7) return null;
+    return s;
+});
+    
     const [isLoading, setIsLoading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [showUpgrade, setShowUpgrade] = useState(false);
