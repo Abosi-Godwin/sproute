@@ -1,7 +1,7 @@
-const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ message: 'Method not allowed' });
     }
@@ -67,4 +67,4 @@ module.exports = async function handler(req, res) {
         console.error('Webhook error:', err);
         res.status(500).json({ message: 'Webhook processing failed' });
     }
-};
+}
