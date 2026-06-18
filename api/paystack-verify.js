@@ -21,14 +21,12 @@ export default async function handler(req, res) {
         );
 
         const verifyData = await verifyRes.json();
-        console.log('Paystack verify response:', JSON.stringify(verifyData));
 
         if (!verifyData.status || verifyData.data.status !== 'success') {
-            return res.status(400).json({ message: 'Payment not verified', detail: verifyData });
+            return res.status(400).json({ message: 'Payment not verified' });
         }
 
         const email = verifyData.data.customer.email;
-        console.log('Resolved email:', email);
 
         const supabase = createClient(
             process.env.SUPABASE_URL,
@@ -38,19 +36,15 @@ export default async function handler(req, res) {
         const { data: userId, error: lookupError } = await supabase
             .rpc('get_user_id_by_email', { lookup_email: email });
 
-        console.log('Lookup result:', { userId, lookupError });
-
-        if (lookupError) {
-            return res.status(500).json({ message: 'Lookup failed', detail: lookupError });
-        }
+        if (lookupError) throw lookupError;
         if (!userId) {
-            return res.status(404).json({ message: 'No matching user found', email });
+            return res.status(404).json({ message: 'No matching user found' });
         }
 
         const periodEnd = new Date();
         periodEnd.setDate(periodEnd.getDate() + 30);
 
-        const { data: upsertData, error: upsertError } = await supabase
+        const { error: upsertError } = await supabase
             .from('subscriptions')
             .upsert({
                 user_id: userId,
@@ -58,18 +52,13 @@ export default async function handler(req, res) {
                 status: 'active',
                 paystack_customer_code: verifyData.data.customer.customer_code,
                 current_period_end: periodEnd.toISOString(),
-            }, { onConflict: 'user_id' })
-            .select();
+            }, { onConflict: 'user_id' });
 
-        console.log('Upsert result:', { upsertData, upsertError });
+        if (upsertError) throw upsertError;
 
-        if (upsertError) {
-            return res.status(500).json({ message: 'Upsert failed', detail: upsertError });
-        }
-
-        res.status(200).json({ success: true, upsertData });
+        res.status(200).json({ success: true });
     } catch (err) {
         console.error('Verify error:', err);
-        res.status(500).json({ message: 'Verification failed', detail: err.message });
+        res.status(500).json({ message: 'Verification failed' });
     }
 }
