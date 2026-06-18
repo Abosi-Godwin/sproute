@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X, Sparkles, Check, Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { useSubscriptionStore } from "../lib/stores/useSubscriptionStore";
+import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
 import toast from "react-hot-toast";
 
 declare global {
