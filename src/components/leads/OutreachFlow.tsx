@@ -91,6 +91,15 @@ const TONE_RULES = `- If tone is casual or formal, write in Standard English onl
 const DAY14_CASUAL = "I'll leave this here for now. Whenever you're ready to revisit it, just reach out and I'll be around.";
 const DAY14_PIDGIN = "I go leave am here for now. Anytime you wan revisit am, just reach out — I dey.";
 const DAY14_FORMAL = "I understand you may be occupied. Please do not hesitate to reach out whenever you are ready to explore this further.";
+function MessageSkeleton() {
+    return (
+        <div className="space-y-2 animate-pulse">
+            <div className="h-3 bg-base-700 rounded w-3/4" />
+            <div className="h-3 bg-base-700 rounded w-full" />
+            <div className="h-3 bg-base-700 rounded w-5/6" />
+        </div>
+    );
+}
 
 function NoReplyTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
@@ -176,11 +185,7 @@ Notes: ${lead.notes || "none"}`
         toast.success("Copied");
     };
 
-    const messages = sequence ? [
-        { id: "day3", label: "Day 3 — Check in", text: sequence.day3, isStatic: false },
-        { id: "day7", label: "Day 7 — Add value", text: sequence.day7, isStatic: false },
-        { id: "day14", label: "Day 14 — Final message", text: day14, isStatic: true },
-    ] : [];
+    const showSequenceBlock = isLoading || sequence !== null;
 
     return (
         <div className="space-y-4">
@@ -204,34 +209,51 @@ Notes: ${lead.notes || "none"}`
                 {sequence ? "Regenerate" : "Generate Sequence"}
             </button>
 
-            {isLoading && (
-                <div className="flex items-center gap-2 py-4 justify-center">
-                    <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                    <p className="text-xs text-base-500">Generating follow-up sequence...</p>
-                </div>
-            )}
-
-            {messages.length > 0 && !isLoading && (
+            {showSequenceBlock && (
                 <div className="space-y-3">
-                    {messages.map(msg => (
-                        <div
-                            key={msg.id}
-                            className={clsx(
-                                "border rounded-xl p-4 space-y-3",
-                                msg.isStatic ? "border-base-800 opacity-70" : "border-base-800"
-                            )}
-                        >
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold text-base-400">{msg.label}</p>
-                                {msg.isStatic && <span className="text-xs text-base-600">Static</span>}
-                            </div>
-                            <p className="text-sm text-base-200 leading-relaxed">{msg.text}</p>
-                            <div className="flex items-center gap-2">
-                                <CopyBtn text={msg.text} id={msg.id} copiedId={copiedId} onCopy={handleCopy} />
-                                <WABtn text={msg.text} number={whatsappNumber} />
-                            </div>
+                    <div className="border border-base-800 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-semibold text-base-400">Day 3 — Check in</p>
+                        {isLoading
+                            ? <MessageSkeleton />
+                            : (
+                                <>
+                                    <p className="text-sm text-base-200 leading-relaxed">{sequence?.day3}</p>
+                                    <div className="flex items-center gap-2">
+                                        <CopyBtn text={sequence!.day3} id="day3" copiedId={copiedId} onCopy={handleCopy} />
+                                        <WABtn text={sequence!.day3} number={whatsappNumber} />
+                                    </div>
+                                </>
+                            )
+                        }
+                    </div>
+
+                    <div className="border border-base-800 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-semibold text-base-400">Day 7 — Add value</p>
+                        {isLoading
+                            ? <MessageSkeleton />
+                            : (
+                                <>
+                                    <p className="text-sm text-base-200 leading-relaxed">{sequence?.day7}</p>
+                                    <div className="flex items-center gap-2">
+                                        <CopyBtn text={sequence!.day7} id="day7" copiedId={copiedId} onCopy={handleCopy} />
+                                        <WABtn text={sequence!.day7} number={whatsappNumber} />
+                                    </div>
+                                </>
+                            )
+                        }
+                    </div>
+
+                    <div className="border border-base-800 rounded-xl p-4 space-y-3 opacity-70">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold text-base-400">Day 14 — Final message</p>
+                            <span className="text-xs text-base-600">Static</span>
                         </div>
-                    ))}
+                        <p className="text-sm text-base-200 leading-relaxed">{day14}</p>
+                        <div className="flex items-center gap-2">
+                            <CopyBtn text={day14} id="day14" copiedId={copiedId} onCopy={handleCopy} />
+                            <WABtn text={day14} number={whatsappNumber} />
+                        </div>
+                    </div>
                 </div>
             )}
 
