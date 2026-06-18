@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { X, Sparkles, Check, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useSubscriptionStore } from '../lib/stores/useSubscriptionStore';
-import toast from 'react-hot-toast';
+import { useState } from "react";
+import { X, Sparkles, Check, Loader2 } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import { useSubscriptionStore } from "../lib/stores/useSubscriptionStore";
+import toast from "react-hot-toast";
 
 declare global {
     interface Window {
@@ -15,14 +15,18 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
     const { fetchSubscription } = useSubscriptionStore();
 
     const handleUpgrade = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+            data: { user }
+        } = await supabase.auth.getUser();
         if (!user?.email) {
-            toast.error('Could not find your account email — try signing in again');
+            toast.error(
+                "Could not find your account email — try signing in again"
+            );
             return;
         }
 
         if (!window.PaystackPop) {
-            toast.error('Payment system not loaded — refresh and try again');
+            toast.error("Payment system not loaded — refresh and try again");
             return;
         }
 
@@ -30,19 +34,23 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
             key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
             email: user.email,
             amount: 350000,
-            currency: 'NGN',
+            currency: "NGN",
             ref: `sproute_${user.id}_${Date.now()}`,
             metadata: {
                 custom_fields: [
-                    { display_name: 'Plan', variable_name: 'plan', value: 'Sproute Pro' },
-                ],
+                    {
+                        display_name: "Plan",
+                        variable_name: "plan",
+                        value: "Sproute Pro"
+                    }
+                ]
             },
             callback: function (response: { reference: string }) {
                 verifyPayment(response.reference);
             },
             onClose: function () {
-                toast('Payment cancelled');
-            },
+                toast("Payment cancelled");
+            }
         });
 
         handler.openIframe();
@@ -51,23 +59,25 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
     const verifyPayment = async (reference: string) => {
         setIsProcessing(true);
         try {
-            const res = await fetch('/api/paystack-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reference }),
+            const res = await fetch("/api/paystack-verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reference })
             });
 
             const data = await res.json();
 
             if (res.ok && data.success) {
                 await fetchSubscription();
-                toast.success('Welcome to Pro! Your account is upgraded.');
+                toast.success("Welcome to Pro! Your account is upgraded.");
                 onClose();
             } else {
-                toast.error('Payment received but verification failed — contact support');
+                toast.error(
+                    "Payment received but verification failed — contact support"
+                );
             }
         } catch {
-            toast.error('Could not verify payment — contact support');
+            toast.error("Could not verify payment — contact support");
         } finally {
             setIsProcessing(false);
         }
@@ -83,30 +93,38 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
                             Upgrade to Pro
                         </h3>
                     </div>
-                    <button onClick={onClose} className="text-base-500 hover:text-base-300">
+                    <button
+                        onClick={onClose}
+                        className="text-base-500 hover:text-base-300"
+                    >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 <p className="text-sm text-base-400">
-                    You have hit your free plan limit. Upgrade to keep prospecting without interruptions.
+                    You have hit your free plan limit. Upgrade to keep
+                    prospecting without interruptions.
                 </p>
 
                 <div className="space-y-2.5">
                     {[
-                        'Unlimited saved leads',
-                        '50 AI generations per day',
-                        'Priority support',
+                        "Unlimited saved leads",
+                        "50 AI generations per day",
+                        "Priority support"
                     ].map(item => (
                         <div key={item} className="flex items-center gap-2.5">
                             <Check className="w-4 h-4 text-brand-400 shrink-0" />
-                            <span className="text-sm text-base-300">{item}</span>
+                            <span className="text-sm text-base-300">
+                                {item}
+                            </span>
                         </div>
                     ))}
                 </div>
 
                 <div className="bg-base-800 rounded-xl p-4 text-center">
-                    <p className="font-display text-3xl font-bold text-base-50">₦3,500</p>
+                    <p className="font-display text-3xl font-bold text-base-50">
+                        ₦3,500
+                    </p>
                     <p className="text-xs text-base-500">per month</p>
                 </div>
 
@@ -115,10 +133,14 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
                     disabled={isProcessing}
                     className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
                 >
-                    {isProcessing
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
-                        : 'Upgrade Now'
-                    }
+                    {isProcessing ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                            Verifying...
+                        </>
+                    ) : (
+                        "Upgrade Now"
+                    )}
                 </button>
 
                 <p className="text-xs text-base-600 text-center">
