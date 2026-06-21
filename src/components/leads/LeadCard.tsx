@@ -1,4 +1,4 @@
- import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import {
     Phone, Globe, Star, Trash2, MoreVertical,
@@ -28,7 +28,7 @@ const statusStyles: Record<LeadStatus, string> = {
     replied: "bg-yellow-500/10 text-yellow-400",
     converted: "bg-brand-500/10 text-brand-400",
     dead: "bg-red-500/10 text-red-400",
-    not_on_whatsapp: "bg-orange-500/10 text-orange-400"
+    not_on_whatsapp: "bg-orange-500/10 text-orange-400",
 };
 
 const DEAD_REASON_LABELS: Record<DeadReason, string> = {
@@ -53,7 +53,7 @@ function getNextAction(lead: Lead): { icon: React.ElementType; text: string; col
                 return {
                     icon: Clock,
                     text: days === 0 ? "Follow up today" : `Follow up in ${days} day${days > 1 ? "s" : ""}`,
-                    color: "text-blue-400"
+                    color: "text-blue-400",
                 };
             }
             return { icon: Clock, text: "Set a follow-up date", color: "text-base-500" };
@@ -86,10 +86,6 @@ export default function LeadCard({ lead, selected, toggleSelect }: LeadCardProps
     const ageConf = ageConfig[age];
     const reasons = getOpportunityReasons(lead);
     const nextAction = getNextAction(lead);
-
-    useEffect(() => {
-        setLocalStatus(lead.status);
-    }, [lead.status]);
 
     const handleStatusChange = async (newStatus: LeadStatus) => {
         setLocalStatus(newStatus);

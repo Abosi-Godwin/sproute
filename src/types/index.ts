@@ -4,6 +4,13 @@ export type LeadStatus =
 
 export type MessageAngle = "curiosity" | "friendly" | "direct";
 export type OutreachFlowTab = "no_reply" | "replied" | "chatHelper";
+export type OutreachStep =
+    | "initial_curiosity"
+    | "initial_friendly"
+    | "initial_direct"
+    | "day3"
+    | "day7"
+    | "day14";
 
 export type DeadReason =
     | "has_website"
@@ -56,6 +63,7 @@ export interface Lead {
     followUpSequence?: FollowUpSequence;
     chatHistory?: ChatMessage[];
     deadReason?: DeadReason;
+    lastOutreachStep?: OutreachStep;
     savedAt: string;
     updatedAt: string;
     searchQuery?: string;

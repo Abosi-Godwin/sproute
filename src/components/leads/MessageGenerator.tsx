@@ -1,13 +1,8 @@
 import { useState, useEffect } from "react";
 import {
-    Sparkles,
-    RefreshCw,
-    Copy,
-    Check,
-    Loader2,
-    MessageCircle
+    Sparkles, RefreshCw, Copy, Check, Loader2, MessageCircle
 } from "lucide-react";
-import { Lead, MessageAngle } from "../../types";
+import { Lead, MessageAngle, OutreachStep } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { useUsageStore } from "../../lib/stores/useUsageStore";
@@ -22,21 +17,10 @@ interface GeneratedMessage {
     text: string;
 }
 
-const angleConfig: Record<
-    MessageAngle,
-    { label: string; color: string; bg: string }
-> = {
-    curiosity: {
-        label: "Curiosity",
-        color: "text-purple-400",
-        bg: "bg-purple-500/10"
-    },
-    friendly: {
-        label: "Friendly",
-        color: "text-brand-400",
-        bg: "bg-brand-500/10"
-    },
-    direct: { label: "Direct", color: "text-blue-400", bg: "bg-blue-500/10" }
+const angleConfig: Record<MessageAngle, { label: string; color: string; bg: string }> = {
+    curiosity: { label: "Curiosity", color: "text-purple-400", bg: "bg-purple-500/10" },
+    friendly: { label: "Friendly", color: "text-brand-400", bg: "bg-brand-500/10" },
+    direct: { label: "Direct", color: "text-blue-400", bg: "bg-blue-500/10" },
 };
 
 function parsePersistedMessages(raw?: string): GeneratedMessage[] {
@@ -47,7 +31,7 @@ function parsePersistedMessages(raw?: string): GeneratedMessage[] {
             return [
                 { id: "curiosity", angle: "curiosity", text: parsed.curiosity },
                 { id: "friendly", angle: "friendly", text: parsed.friendly },
-                { id: "direct", angle: "direct", text: parsed.direct }
+                { id: "direct", angle: "direct", text: parsed.direct },
             ];
         }
     } catch {
@@ -58,20 +42,12 @@ function parsePersistedMessages(raw?: string): GeneratedMessage[] {
 
 export default function MessageGenerator({ lead }: { lead: Lead }) {
     const {
-        logActivity,
-        saveGeneratedMessage,
-        setSelectedMessageAngle
+        logActivity, saveGeneratedMessage,
+        setSelectedMessageAngle, setLastOutreachStep
     } = useLeadsStore();
 
     const { outreachTone, serviceDescription } = useSettingsStore();
-
-    const {
-        canGenerateAi,
-        incrementAiGenerations,
-        remainingAiGenerations,
-        resetIfNewDay
-    } = useUsageStore();
-
+    const { canGenerateAi, incrementAiGenerations, remainingAiGenerations, resetIfNewDay } = useUsageStore();
     const { isPro } = useSubscriptionStore();
     const pro = isPro();
 
@@ -86,7 +62,7 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     const toneInstructions: Record<string, string> = {
         casual: "Warm, conversational Standard Nigerian English. NOT Pidgin. Friendly but clear.",
         formal: "Professional and approachable Standard English. NOT Pidgin.",
-        pidgin: "Natural Nigerian Pidgin English throughout — every sentence."
+        pidgin: "Natural Nigerian Pidgin English throughout — every sentence.",
     };
 
     const generate = async () => {
@@ -107,9 +83,8 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         systemInstruction: {
-                            parts: [
-                                {
-                                    text: `You write WhatsApp outreach messages for freelancers contacting local businesses.
+                            parts: [{
+                                text: `You write WhatsApp outreach messages for freelancers contacting local businesses.
 
 The goal is to start a conversation, not sell immediately.
 
@@ -159,33 +134,25 @@ Return ONLY valid JSON with no markdown:
   "friendly": "...",
   "direct": "..."
 }`
-                                }
-                            ]
+                            }]
                         },
-                        contents: [
-                            {
-                                parts: [
-                                    {
-                                        text: `Business name: ${lead.name}
+                        contents: [{
+                            parts: [{
+                                text: `Business name: ${lead.name}
 Category: ${lead.category}
 Location: ${lead.address}
 Has website: ${lead.website ? `yes — ${lead.website}` : "no"}
 Additional context: ${lead.notes || "none"}
 
 Generate 3 outreach message variations.`
-                                    }
-                                ]
-                            }
-                        ]
+                            }]
+                        }]
                     })
                 }
             );
 
             const data = await res.json();
-            if (!res.ok)
-                throw new Error(
-                    data.error?.message ?? "Gemini request failed."
-                );
+            if (!res.ok) throw new Error(data.error?.message ?? "Gemini request failed.");
 
             const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
             const clean = raw.replace(/```json|```/g, "").trim();
@@ -194,16 +161,15 @@ Generate 3 outreach message variations.`
             const generated: GeneratedMessage[] = [
                 { id: "curiosity", angle: "curiosity", text: parsed.curiosity },
                 { id: "friendly", angle: "friendly", text: parsed.friendly },
-                { id: "direct", angle: "direct", text: parsed.direct }
+                { id: "direct", angle: "direct", text: parsed.direct },
             ];
 
             setMessages(generated);
             saveGeneratedMessage(lead.id, JSON.stringify(parsed));
-
             logActivity({
                 leadId: lead.id,
                 leadName: lead.name,
-                message: `Generated 3 message variations for ${lead.name}`
+                message: `Generated 3 message variations for ${lead.name}`,
             });
             incrementAiGenerations();
             toast.success("3 variations generated");
@@ -241,12 +207,11 @@ Generate 3 outreach message variations.`
         setCopiedId(angle);
         setTimeout(() => setCopiedId(null), 2000);
         toast.success("Copied to clipboard");
-
         setSelectedMessageAngle(lead.id, angle);
         logActivity({
             leadId: lead.id,
             leadName: lead.name,
-            message: `Copied ${angle} message for ${lead.name}`
+            message: `Copied ${angle} message for ${lead.name}`,
         });
     };
 
@@ -254,16 +219,15 @@ Generate 3 outreach message variations.`
         const number = lead.whatsappNumber ?? lead.phone;
         if (!number) return;
         const phone = number.replace(/\D/g, "");
-        window.open(
-            `https://wa.me/${phone}?text=${encodeURIComponent(text)}`,
-            "_blank"
-        );
-
-        setSelectedMessageAngle(lead.id, angle);
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+        if (angle) {
+            setSelectedMessageAngle(lead.id, angle);
+            setLastOutreachStep(lead.id, `initial_${angle}` as OutreachStep);
+        }
         logActivity({
             leadId: lead.id,
             leadName: lead.name,
-            message: `Sent ${angle} message to ${lead.name} via WhatsApp`
+            message: `Sent ${angle} message to ${lead.name} via WhatsApp`,
         });
     };
 
@@ -311,9 +275,7 @@ Generate 3 outreach message variations.`
             {isLoading && (
                 <div className="flex items-center justify-center py-6 gap-2">
                     <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                    <p className="text-xs text-base-500">
-                        Generating 3 variations...
-                    </p>
+                    <p className="text-xs text-base-500">Generating 3 variations...</p>
                 </div>
             )}
 
@@ -327,9 +289,7 @@ Generate 3 outreach message variations.`
                                 key={msg.id}
                                 className={clsx(
                                     "border rounded-xl p-4 space-y-3 transition-colors",
-                                    isLastUsed
-                                        ? "border-brand-500/30 bg-brand-500/5"
-                                        : "border-base-800"
+                                    isLastUsed ? "border-brand-500/30 bg-brand-500/5" : "border-base-800"
                                 )}
                             >
                                 <div className="flex items-center justify-between">
