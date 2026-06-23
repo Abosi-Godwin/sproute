@@ -17,7 +17,7 @@ import UpgradeModal from "../ui/UpgradeModal";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`;
 
 async function callGemini(systemText: string, userText: string): Promise<string> {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
