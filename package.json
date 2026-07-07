@@ -9,12 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "latest",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-virtual": "^3.13.24",
+    "@vercel/analytics": "^2.0.1",
     "clsx": "latest",
     "framer-motion": "latest",
     "lucide-react": "latest",
+    "posthog-js": "^1.395.0",
     "react": "latest",
     "react-dom": "latest",
     "react-hot-toast": "^2.6.0",

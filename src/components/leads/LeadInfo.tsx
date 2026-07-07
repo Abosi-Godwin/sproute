@@ -1,13 +1,23 @@
 import {
-    MapPin, Phone, Globe, Star,
-    MessageCircle, Calendar, Bell
+    MapPin,
+    Phone,
+    Globe,
+    Star,
+    MessageCircle,
+    Calendar,
+    Bell
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Lead, LeadStatus, DeadReason } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 
 const STATUSES: LeadStatus[] = [
-    "new", "messaged", "replied", "converted", "not_on_whatsapp", "dead"
+    "new",
+    "messaged",
+    "replied",
+    "converted",
+    "not_on_whatsapp",
+    "dead"
 ];
 
 const statusStyles: Record<LeadStatus, string> = {
@@ -16,7 +26,7 @@ const statusStyles: Record<LeadStatus, string> = {
     replied: "bg-yellow-500/10 text-yellow-400",
     converted: "bg-brand-500/10 text-brand-400",
     dead: "bg-red-500/10 text-red-400",
-    not_on_whatsapp: "bg-orange-500/10 text-orange-400",
+    not_on_whatsapp: "bg-orange-500/10 text-orange-400"
 };
 
 const DEAD_REASONS: { id: DeadReason; label: string }[] = [
@@ -25,7 +35,7 @@ const DEAD_REASONS: { id: DeadReason; label: string }[] = [
     { id: "wrong_number", label: "Wrong number" },
     { id: "no_response", label: "No response" },
     { id: "too_expensive", label: "Too expensive" },
-    { id: "other", label: "Other" },
+    { id: "other", label: "Other" }
 ];
 
 const STEP_LABELS: Record<string, string> = {
@@ -34,7 +44,7 @@ const STEP_LABELS: Record<string, string> = {
     initial_direct: "Sent initial — Direct angle",
     day3: "Sent Day 3 check-in",
     day7: "Sent Day 7 value message",
-    day14: "Sent Day 14 final message",
+    day14: "Sent Day 14 final message"
 };
 
 const NEXT_STEP: Record<string, string> = {
@@ -43,7 +53,13 @@ const NEXT_STEP: Record<string, string> = {
     initial_direct: "Send Day 3 check-in next",
     day3: "Send Day 7 value message next",
     day7: "Send Day 14 final message next",
-    day14: "Sequence complete",
+    day14: "Sequence complete"
+};
+
+// Helper function to cleanly handle Proper Noun Title Casing
+const toTitleCase = (str: string) => {
+    if (!str) return "";
+    return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
 export default function LeadInfo({ lead }: { lead: Lead }) {
@@ -54,29 +70,44 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h2 className="font-display font-bold text-xl text-base-50">{lead.name}</h2>
-                    <p className="text-sm text-base-500 mt-0.5">{lead.category}</p>
+                    {/* Replaced CSS casing with the JS Title Case helper */}
+                    <h2 className="font-display font-bold text-xl text-base-50">
+                        {toTitleCase(lead.name)}
+                    </h2>
+                    <p className="text-sm text-base-500 mt-0.5 uppercase">
+                        {lead.category}
+                    </p>
                 </div>
                 {lead.rating && (
                     <div className="flex items-center gap-1.5 shrink-0 bg-base-800 px-2.5 py-1.5 rounded-lg">
                         <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                        <span className="text-sm font-medium text-base-200">{lead.rating}</span>
+                        <span className="text-sm font-medium text-base-200">
+                            {lead.rating}
+                        </span>
                         {lead.reviews && (
-                            <span className="text-xs text-base-500">({lead.reviews})</span>
+                            <span className="text-xs text-base-500">
+                                ({lead.reviews})
+                            </span>
                         )}
                     </div>
                 )}
             </div>
 
             <div className="space-y-2.5">
+                {/* Removed 'lowercase' from wrapper and 'first-letter:uppercase' from span */}
                 <div className="flex items-start gap-2.5 text-sm text-base-400">
                     <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{lead.address}</span>
+                    <span>
+                        {toTitleCase(lead.address)}
+                    </span>
                 </div>
                 {lead.phone && (
                     <div className="flex items-center gap-2.5 text-sm text-base-400">
                         <Phone className="w-4 h-4 shrink-0" />
-                        <a href={`tel:${lead.phone}`} className="hover:text-base-200 transition-colors">
+                        <a
+                            href={`tel:${lead.phone}`}
+                            className="hover:text-base-200 transition-colors"
+                        >
                             {lead.phone}
                         </a>
                     </div>
@@ -93,18 +124,30 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
                             {lead.website}
                         </a>
                     ) : (
-                        <span className="text-red-400">No website</span>
+                        <span className="text-base-400">No website</span>
                     )}
                 </div>
                 <div className="flex items-center gap-2.5 text-sm text-base-500">
                     <Calendar className="w-4 h-4 shrink-0" />
-                    <span>Saved {new Date(lead.savedAt).toLocaleDateString()}</span>
+                    <span>
+                        Saved {new Date(lead.savedAt).toLocaleDateString()}
+                    </span>
                 </div>
 
                 <div className="flex items-center gap-2.5 text-sm">
-                    <Bell className={clsx("w-4 h-4 shrink-0", canFollowUp ? "text-base-400" : "text-base-600")} />
+                    <Bell
+                        className={clsx(
+                            "w-4 h-4 shrink-0",
+                            canFollowUp ? "text-base-400" : "text-base-600"
+                        )}
+                    />
                     <div className="flex items-center gap-2 flex-1">
-                        <span className={clsx("text-sm shrink-0", canFollowUp ? "text-base-400" : "text-base-600")}>
+                        <span
+                            className={clsx(
+                                "text-sm shrink-0",
+                                canFollowUp ? "text-base-400" : "text-base-500"
+                            )}
+                        >
                             Follow up:
                         </span>
                         {canFollowUp ? (
@@ -112,11 +155,15 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
                                 type="date"
                                 value={lead.followUpDate ?? ""}
                                 min={new Date().toISOString().split("T")[0]}
-                                onChange={e => setFollowUpDate(lead.id, e.target.value)}
+                                onChange={e =>
+                                    setFollowUpDate(lead.id, e.target.value)
+                                }
                                 className="flex-1 bg-base-800 border border-base-700 rounded-lg px-3 py-1.5 text-sm text-base-100 focus:outline-none focus:border-brand-500 transition-colors"
                             />
                         ) : (
-                            <span className="text-xs text-base-600 italic">Message this lead first</span>
+                            <span className="text-xs text-base-400 font-medium italic">
+                                Message this lead first
+                            </span>
                         )}
                     </div>
                 </div>
@@ -138,22 +185,31 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
 
             <select
                 value={lead.status}
-                onChange={e => updateStatus(lead.id, e.target.value as LeadStatus)}
+                onChange={e =>
+                    updateStatus(lead.id, e.target.value as LeadStatus)
+                }
                 className={clsx(
                     "w-full text-sm font-medium px-3 py-2.5 rounded-lg border-0 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer",
                     statusStyles[lead.status]
                 )}
             >
                 {STATUSES.map(s => (
-                    <option key={s} value={s} className="bg-base-800 text-base-100">
-                        {s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                    <option
+                        key={s}
+                        value={s}
+                        className="bg-base-800 text-base-100"
+                    >
+                        {/* Utilized the same helper function here for consistency */}
+                        {toTitleCase(s.replace(/_/g, " "))}
                     </option>
                 ))}
             </select>
 
             {lead.status === "dead" && (
                 <div className="space-y-2 pt-1">
-                    <p className="text-xs text-base-500 font-medium">Why is this lead dead?</p>
+                    <p className="text-xs text-base-500 font-medium">
+                        Why is this lead dead?
+                    </p>
                     <div className="flex flex-wrap gap-2">
                         {DEAD_REASONS.map(r => (
                             <button
@@ -172,7 +228,11 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
                     </div>
                     {lead.deadReason && (
                         <p className="text-xs text-base-600">
-                            Marked as: {DEAD_REASONS.find(r => r.id === lead.deadReason)?.label}
+                            Marked as:{" "}
+                            {
+                                DEAD_REASONS.find(r => r.id === lead.deadReason)
+                                    ?.label
+                            }
                         </p>
                     )}
                 </div>

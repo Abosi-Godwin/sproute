@@ -22,56 +22,35 @@ export default function OpportunitySummary({ lead }: { lead: Lead }) {
         setError("");
 
         try {
+            const leadContext = `
+                Business: ${lead.name}
+                Category: ${lead.category}
+                Location: ${lead.address}
+                Has website: ${lead.website ? `yes — ${lead.website}` : "no"}
+                Rating: ${lead.rating ?? "unknown"}
+                Reviews: ${lead.reviews ?? "unknown"}
+                Phone available: ${lead.phone ? "yes" : "no"}
+                Unclaimed listing: ${lead.unclaimedListing ? "yes" : "no"}
+                Opportunity score: ${score}/10
+                Key signals: ${reasons.join(", ")}
+            `;
+
             const res = await fetch("/api/gemini", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    systemInstruction: {
-                        parts: [
-                            {
-                                text: `You analyze local businesses and explain in plain language why they might be a good prospect for a freelancer.
-
-Rules:
-- 2 to 3 sentences only
-- Plain simple English
-- No corporate language
-- No exaggeration
-- Only use facts provided
-- Never invent information
-- Focus on signals that suggest the business has customers, money, and a gap the freelancer can fill
-- Sound like a knowledgeable friend giving honest advice
-- Do not start with "This business" — vary the opening`
-                            }
-                        ]
-                    },
-                    contents: [
-                        {
-                            parts: [
-                                {
-                                    text: `Business: ${lead.name}
-Category: ${lead.category}
-Location: ${lead.address}
-Has website: ${lead.website ? `yes — ${lead.website}` : "no"}
-Rating: ${lead.rating ?? "unknown"}
-Reviews: ${lead.reviews ?? "unknown"}
-Phone available: ${lead.phone ? "yes" : "no"}
-Unclaimed listing: ${lead.unclaimedListing ? "yes" : "no"}
-Opportunity score: ${score}/10
-Key signals: ${reasons.join(", ")}
-
-Explain in 2-3 sentences why this business is or is not a good prospect.`
-                                }
-                            ]
-                        }
-                    ]
+                    scenario: "opportunity_summary",
+                    leadData: leadContext
                 })
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error?.message ?? "Failed");
+            
+            if (!res.ok) throw new Error(data.error || "Failed");
 
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-            setSummary(text.trim());
+            // Your backend now returns { text: "..." } for this scenario
+            setSummary(data.text.trim());
+            
         } catch (err: any) {
             const msg = err.message ?? "";
             if (msg.includes("429") || msg.toLowerCase().includes("quota")) {

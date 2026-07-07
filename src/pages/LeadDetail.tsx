@@ -40,14 +40,6 @@ export default function LeadDetail() {
                 >
                     <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div>
-                    <h1 className="font-display text-2xl font-bold text-base-50">
-                        {lead.name}
-                    </h1>
-                    <p className="text-sm text-base-400 mt-0.5">
-                        {lead.category}
-                    </p>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
