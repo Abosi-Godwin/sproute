@@ -1,7 +1,6 @@
-import { getPrompt, RESPONSE_SCHEMAS } from "./prompts";
+import { getPrompt, RESPONSE_SCHEMAS } from "./prompts.js";
 
 export default async function handler(req, res) {
-    console.log(req, res);
     if (req.method !== "POST") {
         return res.status(405).json({ message: "Method not allowed" });
     }
