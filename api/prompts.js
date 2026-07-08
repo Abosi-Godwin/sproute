@@ -9,6 +9,9 @@ const TONE_RULES = `- If tone is casual or formal, write in Standard English onl
 - Never mix tones`;
 
 export function getPrompt(scenario, { tone, service } = {}) {
+  
+    console.log(scenario, tone, service);
+    
     const toneInstruction = TONE_MAP[tone] || TONE_MAP.casual;
     const serviceDescription =
         service || "web development and online solutions";
@@ -140,19 +143,19 @@ Return plain bullet points only. No headers. No intro sentence.`
 
 export const RESPONSE_SCHEMAS = {
     message_generator: {
-        type: "object",
+        type: "OBJECT",
         properties: {
-            curiosity: { type: "string" },
-            friendly: { type: "string" },
-            direct: { type: "string" }
+            curiosity: { type: "STRING" },
+            friendly: { type: "STRING" },
+            direct: { type: "STRING" }
         },
         required: ["curiosity", "friendly", "direct"]
     },
     no_reply_sequence: {
-        type: "object",
+        type: "OBJECT",
         properties: {
-            day3: { type: "string" },
-            day7: { type: "string" }
+            day3: { type: "STRING" },
+            day7: { type: "STRING" }
         },
         required: ["day3", "day7"]
     }

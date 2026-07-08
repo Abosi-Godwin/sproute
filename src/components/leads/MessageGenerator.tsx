@@ -85,7 +85,6 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
         msgId: string,
         angle: MessageAngle
     ) => {
-        // Look how clean this is now!
         await copyText(text);
 
         setCopiedId(msgId);

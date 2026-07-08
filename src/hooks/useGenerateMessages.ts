@@ -22,54 +22,60 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
     const [error, setError] = useState("");
     const [showUpgrade, setShowUpgrade] = useState(false);
 
-  const generate = async () => {
-    setIsLoading(true);
-    setError(null);
+    const generate = async () => {
+        if (!canGenerateAi(pro)) {
+            setShowUpgrade(true);
+            return null;
+        }
 
-    try {
-        const leadContext = `
-            Business: ${lead.name}
-            Category: ${lead.category}
-            Location: ${lead.address || "unknown"}
-            Has website: ${lead.website ? "yes" : "no"}
-            Rating: ${lead.rating ?? "unknown"}
-            Reviews: ${lead.reviews ?? "unknown"}
-            Notes: ${lead.notes || "none"}
-        `;
+        setIsLoading(true);
+        setError("");
 
-        const res = await fetch("/api/gemini", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                scenario: "message_generator",
-                tone,
-                service,
-                leadData: leadContext
-            })
-        });
+        try {
+            const leadContext = `
+                Business: ${lead.name}
+                Category: ${lead.category}
+                Location: ${lead.address || "unknown"}
+                Has website: ${lead.website ? "yes" : "no"}
+                Rating: ${lead.rating ?? "unknown"}
+                Reviews: ${lead.reviews ?? "unknown"}
+                Notes: ${lead.notes || "none"}
+            `;
 
-        const data = await res.json();
+            const res = await fetch("/api/gemini", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    scenario: "message_generator",
+                    tone,
+                    service,
+                    leadData: leadContext
+                })
+            });
 
-        if (!res.ok) throw new Error(data.error || "Generation failed");
+            console.log("res", res.json());
 
-        const generated: GeneratedMessage[] = [
-            { id: "curiosity", angle: "curiosity", text: data.curiosity },
-            { id: "friendly", angle: "friendly", text: data.friendly },
-            { id: "direct", angle: "direct", text: data.direct }
-        ];
+            if (!res.ok) throw new Error("Generation failed");
 
-        setPersistedMessages(lead.id, JSON.stringify(data));
-        incrementAiGenerations();
-        return generated;
+            const data = await res.json();
+            console.log("data", data);
 
-    } catch (err: any) {
-        setError(err.message || "Failed to generate messages");
-        return null;
-    } finally {
-        setIsLoading(false);
-    }
-};
+            const generated: GeneratedMessage[] = [
+                { id: "curiosity", angle: "curiosity", text: data.curiosity },
+                { id: "friendly", angle: "friendly", text: data.friendly },
+                { id: "direct", angle: "direct", text: data.direct }
+            ];
 
+            saveGeneratedMessage(lead.id, JSON.stringify(data));
+            incrementAiGenerations();
+            return generated;
+        } catch (err: any) {
+            setError(err.message || "Failed to generate messages");
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return { generate, isLoading, error, showUpgrade, setShowUpgrade, pro };
 }
