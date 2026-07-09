@@ -10,7 +10,7 @@ const TONE_RULES = `- If tone is casual or formal, write in Standard English onl
 
 export function getPrompt(scenario, { tone, service } = {}) {
   
-    console.log(scenario, tone, service);
+    
     
     const toneInstruction = TONE_MAP[tone] || TONE_MAP.casual;
     const serviceDescription =

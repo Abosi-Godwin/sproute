@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
     try {
         const { scenario, tone, service, leadData } = req.body;
-        console.log(scenario, tone, service, leadData);
+
         if (!scenario || !leadData) {
             return res
                 .status(400)
@@ -78,4 +78,4 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: err.message });
     }
 }
-console.log(handler);
+ 
