@@ -52,13 +52,10 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
                     leadData: leadContext
                 })
             });
-
-            console.log("res", res.json());
-
-            if (!res.ok) throw new Error("Generation failed");
-
+            
+            
             const data = await res.json();
-            console.log("data", data);
+            if (!res.ok) throw new Error(data.error || "Generation failed");
 
             const generated: GeneratedMessage[] = [
                 { id: "curiosity", angle: "curiosity", text: data.curiosity },
