@@ -52,8 +52,7 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
                     leadData: leadContext
                 })
             });
-            
-            
+
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Generation failed");
 
@@ -65,6 +64,9 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
 
             saveGeneratedMessage(lead.id, JSON.stringify(data));
             incrementAiGenerations();
+            
+            console.log(generated);
+            
             return generated;
         } catch (err: any) {
             setError(err.message || "Failed to generate messages");
