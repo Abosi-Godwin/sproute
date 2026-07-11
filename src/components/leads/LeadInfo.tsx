@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     MapPin,
     Phone,
@@ -5,11 +6,15 @@ import {
     Star,
     MessageCircle,
     Calendar,
-    Bell
+    Bell,
+    Copy,
+    Check
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Lead, LeadStatus, DeadReason } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
+import { copyText } from "./outreach/outreachUtils";
+import toast from "react-hot-toast";
 
 const STATUSES: LeadStatus[] = [
     "new",
@@ -56,7 +61,6 @@ const NEXT_STEP: Record<string, string> = {
     day14: "Sequence complete"
 };
 
-// Helper function to cleanly handle Proper Noun Title Casing
 const toTitleCase = (str: string) => {
     if (!str) return "";
     return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -65,19 +69,36 @@ const toTitleCase = (str: string) => {
 export default function LeadInfo({ lead }: { lead: Lead }) {
     const { updateStatus, setFollowUpDate, setDeadReason } = useLeadsStore();
     const canFollowUp = lead.status !== "new";
+    const [nameCopied, setNameCopied] = useState(false);
+
+    const handleCopyName = async () => {
+        await copyText(lead.name);
+        setNameCopied(true);
+        toast.success("Business name copied");
+        setTimeout(() => setNameCopied(false), 2000);
+    };
 
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
-                <div>
-                    {/* Replaced CSS casing with the JS Title Case helper */}
-                    <h2 className="font-display font-bold text-xl text-base-50">
-                        {toTitleCase(lead.name)}
-                    </h2>
-                    <p className="text-sm text-base-500 mt-0.5 uppercase">
-                        {lead.category}
-                    </p>
-                </div>
+                <button
+                    onClick={handleCopyName}
+                    className="flex items-start gap-2 text-left group"
+                >
+                    <div>
+                        <h2 className="font-display font-bold text-xl text-base-50 group-hover:text-brand-400 transition-colors">
+                            {toTitleCase(lead.name)}
+                        </h2>
+                        <p className="text-sm text-base-500 mt-0.5 uppercase">
+                            {lead.category}
+                        </p>
+                    </div>
+                    {nameCopied ? (
+                        <Check className="w-3.5 h-3.5 text-brand-400 shrink-0 mt-1" />
+                    ) : (
+                        <Copy className="w-3.5 h-3.5 text-base-600 group-hover:text-base-400 shrink-0 mt-1 transition-colors" />
+                    )}
+                </button>
                 {lead.rating && (
                     <div className="flex items-center gap-1.5 shrink-0 bg-base-800 px-2.5 py-1.5 rounded-lg">
                         <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
@@ -94,7 +115,6 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
             </div>
 
             <div className="space-y-2.5">
-                {/* Removed 'lowercase' from wrapper and 'first-letter:uppercase' from span */}
                 <div className="flex items-start gap-2.5 text-sm text-base-400">
                     <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>
@@ -199,7 +219,6 @@ export default function LeadInfo({ lead }: { lead: Lead }) {
                         value={s}
                         className="bg-base-800 text-base-100"
                     >
-                        {/* Utilized the same helper function here for consistency */}
                         {toTitleCase(s.replace(/_/g, " "))}
                     </option>
                 ))}

@@ -105,104 +105,115 @@ export const useLeadsStore = create<LeadsStore>()(
             },
 
             saveLead: async lead => {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-                const { followUpDays } = useSettingsStore.getState();
-                const followUpDate = new Date();
-                followUpDate.setDate(followUpDate.getDate() + followUpDays);
-                const followUpDateStr = followUpDate.toISOString().split("T")[0];
+    const painPoints = derivePainPoints(lead);
+    const leadWithDefaults = {
+        ...lead,
+        followUpDate: null,
+        painPoints,
+        outreachFlowTab: "no_reply" as OutreachFlowTab,
+    };
 
-                const painPoints = derivePainPoints(lead);
-                const leadWithFollowUp = {
-                    ...lead,
-                    followUpDate: followUpDateStr,
-                    painPoints,
-                    outreachFlowTab: "no_reply" as OutreachFlowTab,
-                };
+    const { error } = await supabase.from("leads").insert({
+        id: lead.id,
+        user_id: user.id,
+        name: lead.name,
+        category: lead.category,
+        address: lead.address,
+        phone: lead.phone ?? null,
+        website: lead.website ?? null,
+        rating: lead.rating ?? null,
+        reviews: lead.reviews ?? null,
+        place_id: lead.placeId,
+        status: lead.status,
+        notes: lead.notes ?? null,
+        location: lead.location,
+        follow_up_date: null,
+        generated_message: lead.generatedMessage ?? null,
+        dead_reason: null,
+        last_outreach_step: null,
+        saved_at: lead.savedAt,
+        updated_at: lead.updatedAt,
+        search_query: lead.searchQuery ?? null,
+        search_location: lead.searchLocation ?? null,
+        unclaimed_listing: lead.unclaimedListing ?? false,
+        whatsapp_number: lead.whatsappNumber ?? null,
+        pain_points: painPoints,
+        outreach_flow_tab: "no_reply",
+    });
 
-                const { error } = await supabase.from("leads").insert({
-                    id: lead.id,
-                    user_id: user.id,
-                    name: lead.name,
-                    category: lead.category,
-                    address: lead.address,
-                    phone: lead.phone ?? null,
-                    website: lead.website ?? null,
-                    rating: lead.rating ?? null,
-                    reviews: lead.reviews ?? null,
-                    place_id: lead.placeId,
-                    status: lead.status,
-                    notes: lead.notes ?? null,
-                    location: lead.location,
-                    follow_up_date: followUpDateStr,
-                    generated_message: lead.generatedMessage ?? null,
-                    dead_reason: null,
-                    last_outreach_step: null,
-                    saved_at: lead.savedAt,
-                    updated_at: lead.updatedAt,
-                    search_query: lead.searchQuery ?? null,
-                    search_location: lead.searchLocation ?? null,
-                    unclaimed_listing: lead.unclaimedListing ?? false,
-                    whatsapp_number: lead.whatsappNumber ?? null,
-                    pain_points: painPoints,
-                    outreach_flow_tab: "no_reply",
-                });
-
-                if (!error) {
-                    set(state => ({ leads: [leadWithFollowUp, ...state.leads] }));
-                    toast.success(`${lead.name} saved`);
-                    await get().logActivity({
-                        leadId: lead.id,
-                        leadName: lead.name,
-                        message: `Saved ${lead.name}`,
-                    });
-                } else {
-                    toast.error("Could not save lead — try again");
-                }
-            },
+    if (!error) {
+        set(state => ({ leads: [leadWithDefaults, ...state.leads] }));
+        toast.success(`${lead.name} saved`);
+        await get().logActivity({
+            leadId: lead.id,
+            leadName: lead.name,
+            message: `Saved ${lead.name}`,
+        });
+    } else {
+        toast.error("Could not save lead — try again");
+    }
+},
 
             updateStatus: async (id, status) => {
-                const autoTab: OutreachFlowTab =
-                    ["replied", "converted"].includes(status) ? "replied" : "no_reply";
+    const autoTab: OutreachFlowTab =
+        ["replied", "converted"].includes(status) ? "replied" : "no_reply";
 
-                set(state => ({
-                    leads: state.leads.map(l =>
-                        l.id === id
-                            ? { ...l, status, outreachFlowTab: autoTab, updatedAt: new Date().toISOString() }
-                            : l
-                    ),
-                }));
+    let followUpDateStr: string | null = null;
+    if (status === "messaged") {
+        const { followUpDays } = useSettingsStore.getState();
+        const followUpDate = new Date();
+        followUpDate.setDate(followUpDate.getDate() + followUpDays);
+        followUpDateStr = followUpDate.toISOString().split("T")[0];
+    }
 
-                const { error } = await supabase
-                    .from("leads")
-                    .update({
-                        status,
-                        outreach_flow_tab: autoTab,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", id);
+    set(state => ({
+        leads: state.leads.map(l =>
+            l.id === id
+                ? {
+                      ...l,
+                      status,
+                      outreachFlowTab: autoTab,
+                      updatedAt: new Date().toISOString(),
+                      ...(followUpDateStr ? { followUpDate: followUpDateStr } : {}),
+                  }
+                : l
+        ),
+    }));
 
-                if (error) {
-                    await get().fetchLeads();
-                    toast.error("Could not update status");
-                    return;
-                }
+    const updatePayload: Record<string, any> = {
+        status,
+        outreach_flow_tab: autoTab,
+        updated_at: new Date().toISOString(),
+    };
+    if (followUpDateStr) updatePayload.follow_up_date = followUpDateStr;
 
-                if (status === "messaged") {
-                    useSettingsStore.getState().recordOutreachActivity();
-                }
+    const { error } = await supabase
+        .from("leads")
+        .update(updatePayload)
+        .eq("id", id);
 
-                const lead = get().leads.find(l => l.id === id);
-                if (lead) {
-                    await get().logActivity({
-                        leadId: id,
-                        leadName: lead.name,
-                        message: `Marked ${lead.name} as ${status.replace(/_/g, " ")}`,
-                    });
-                }
-            },
+    if (error) {
+        await get().fetchLeads();
+        toast.error("Could not update status");
+        return;
+    }
 
+    if (status === "messaged") {
+        useSettingsStore.getState().recordOutreachActivity();
+    }
+
+    const lead = get().leads.find(l => l.id === id);
+    if (lead) {
+        await get().logActivity({
+            leadId: id,
+            leadName: lead.name,
+            message: `Marked ${lead.name} as ${status.replace(/_/g, " ")}`,
+        });
+    }
+},
             updateNotes: async (id, notes) => {
                 set(state => ({
                     leads: state.leads.map(l =>
