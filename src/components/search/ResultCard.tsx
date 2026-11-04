@@ -1,16 +1,23 @@
 import { useState } from "react";
 import {
-    MapPin, Phone, Globe, Star,
-    ShieldAlert, TrendingUp
+    MapPin,
+    Phone,
+    Globe,
+    Star,
+    ShieldAlert,
+    TrendingUp
 } from "lucide-react";
 import { SearchResult } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
-import { useUsageStore, FREE_LEADS_LIMIT } from "../../lib/stores/useUsageStore";
+import { useUsageStore } from "../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
+import { posthog } from "../../lib/posthog";
 import UpgradeModal from "../ui/UpgradeModal";
 import {
-    scoreSearchResult, getTier,
-    tierConfig, getOpportunityReasons
+    scoreSearchResult,
+    getTier,
+    tierConfig,
+    getOpportunityReasons
 } from "../../utils/leadScore";
 import { clsx } from "clsx";
 
@@ -20,7 +27,11 @@ interface ResultCardProps {
     searchLocation: string;
 }
 
-export default function ResultCard({ result, searchQuery, searchLocation }: ResultCardProps) {
+export default function ResultCard({
+    result,
+    searchQuery,
+    searchLocation
+}: ResultCardProps) {
     const { leads, saveLead } = useLeadsStore();
     const [isSaving, setIsSaving] = useState(false);
     const [showUpgrade, setShowUpgrade] = useState(false);
@@ -39,25 +50,55 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
     const handleSave = async () => {
         if (existingLead || isSaving) return;
         setIsSaving(true);
-        await saveLead({
-            id: crypto.randomUUID(),
-            placeId: result.placeId,
-            name: result.name,
-            category: result.category,
-            address: result.address,
-            phone: result.phone,
-            website: result.website,
-            rating: result.rating,
-            reviews: result.reviews,
-            status: "new",
-            savedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            location: "",
-            searchQuery,
-            searchLocation,
-            unclaimedListing: result.unclaimedListing,
+
+        const leadId = crypto.randomUUID();
+
+        try {
+            const saved = await saveLead({
+                id: leadId,
+                placeId: result.placeId,
+                name: result.name,
+                category: result.category,
+                address: result.address,
+                phone: result.phone,
+                website: result.website,
+                rating: result.rating,
+                reviews: result.reviews,
+                status: "new",
+                savedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                location: "",
+                searchQuery,
+                searchLocation,
+                unclaimedListing: result.unclaimedListing
+            });
+
+            if (saved) {
+                posthog.capture("lead_saved", {
+                    lead_id: leadId,
+                    place_id: result.placeId,
+                    category: result.category,
+                    score,
+                    tier,
+                    has_website: Boolean(result.website),
+                    has_phone: Boolean(result.phone),
+                    unclaimed: Boolean(result.unclaimedListing),
+                    search_query: searchQuery,
+                    search_location: searchLocation,
+                    leads_count: leads.length + 1
+                });
+            }
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const openUpgrade = () => {
+        posthog.capture("upgrade_modal_shown", {
+            source: "lead_limit",
+            leads_count: leads.length
         });
-        setIsSaving(false);
+        setShowUpgrade(true);
     };
 
     return (
@@ -68,25 +109,33 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                         {result.name}
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-base-500">{result.category}</span>
+                        <span className="text-xs text-base-500">
+                            {result.category}
+                        </span>
                         {result.rating && (
                             <>
                                 <span className="text-base-700 text-xs">·</span>
                                 <div className="flex items-center gap-1">
                                     <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                                    <span className="text-xs text-base-400">{result.rating}</span>
+                                    <span className="text-xs text-base-400">
+                                        {result.rating}
+                                    </span>
                                 </div>
                             </>
                         )}
                     </div>
                 </div>
 
-                <div className={clsx(
-                    "flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0",
-                    tConf.bg
-                )}>
+                <div
+                    className={clsx(
+                        "flex items-center gap-1 px-2 py-0.5 rounded-lg shrink-0",
+                        tConf.bg
+                    )}
+                >
                     <TrendingUp className={clsx("w-3 h-3", tConf.color)} />
-                    <span className={clsx("text-xs font-semibold", tConf.color)}>{score}</span>
+                    <span className={clsx("text-xs font-semibold", tConf.color)}>
+                        {score}
+                    </span>
                 </div>
             </div>
 
@@ -102,7 +151,10 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
             {tier !== "low" && reasons.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                     {reasons.slice(0, 2).map((reason, i) => (
-                        <span key={i} className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md">
+                        <span
+                            key={i}
+                            className="text-xs text-base-500 bg-base-800 px-2 py-0.5 rounded-md"
+                        >
                             ✓ {reason}
                         </span>
                     ))}
@@ -122,10 +174,13 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                 )}
                 <div className="flex items-center gap-2 text-xs">
                     <Globe className="w-3.5 h-3.5 shrink-0 text-base-400" />
-                    {result.website
-                        ? <span className="text-brand-400">Has website</span>
-                        : <span className="text-blue-400">No website — opportunity</span>
-                    }
+                    {result.website ? (
+                        <span className="text-brand-400">Has website</span>
+                    ) : (
+                        <span className="text-blue-400">
+                            No website: opportunity
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -135,10 +190,10 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                 </span>
             ) : limitReached ? (
                 <button
-                    onClick={() => setShowUpgrade(true)}
+                    onClick={openUpgrade}
                     className="text-xs text-center py-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
                 >
-                    Free limit reached — Upgrade
+                    Free limit reached. Upgrade
                 </button>
             ) : (
                 <button
@@ -150,7 +205,9 @@ export default function ResultCard({ result, searchQuery, searchLocation }: Resu
                 </button>
             )}
 
-            {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+            {showUpgrade && (
+                <UpgradeModal onClose={() => setShowUpgrade(false)} />
+            )}
         </div>
     );
 }

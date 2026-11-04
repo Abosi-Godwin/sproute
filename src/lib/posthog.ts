@@ -5,6 +5,7 @@ export function initPostHog() {
         api_host: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
         capture_pageview: false,
         capture_pageleave: true,
+        capture_exceptions: true,
         session_recording: {
             maskAllInputs: true,
         },

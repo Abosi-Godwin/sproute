@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import { SearchResult } from "../../types";
 import { useSearchStore } from "../../lib/stores/useSearchStore";
+import { posthog } from "../../lib/posthog";
 import ResultCard from "./ResultCard";
 
 type SortOption = "default" | "no-website" | "has-phone" | "rating";
+
+const SORT_OPTIONS: { label: string; value: SortOption }[] = [
+    { label: "Default", value: "default" },
+    { label: "No website first", value: "no-website" },
+    { label: "Has phone first", value: "has-phone" },
+    { label: "Top rated", value: "rating" }
+];
 
 interface ResultsGridProps {
     results: SearchResult[];
@@ -15,8 +23,7 @@ interface ResultsGridProps {
 export default function ResultsGrid({
     results,
     searchQuery,
-    searchLocation,
-    
+    searchLocation
 }: ResultsGridProps) {
     const { filters } = useSearchStore();
     const [sort, setSort] = useState<SortOption>("default");
@@ -35,6 +42,23 @@ export default function ResultsGrid({
         return 0;
     });
 
+    useEffect(() => {
+        if (results.length > 0 && sorted.length === 0) {
+            posthog.capture("results_filtered_empty", {
+                query: searchQuery,
+                location: searchLocation,
+                total_results: results.length,
+                no_website_only: filters.noWebsiteOnly,
+                has_phone: filters.hasPhone
+            });
+        }
+    }, [sorted.length, filters.noWebsiteOnly, filters.hasPhone]);
+
+    const handleSort = (value: SortOption) => {
+        posthog.capture("search_sort_changed", { sort: value });
+        setSort(value);
+    };
+
     if (sorted.length === 0) {
         return (
             <p className="text-center text-base-500 text-sm py-12">
@@ -43,22 +67,14 @@ export default function ResultsGrid({
         );
     }
 
-    const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-        { label: "Default", value: "default" },
-        { label: "No website first", value: "no-website" },
-        { label: "Has phone first", value: "has-phone" },
-        { label: "Top rated", value: "rating" }
-    ];
-
     return (
         <div className="space-y-4">
-            {/* Sort controls */}
             <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-base-500">Sort:</span>
                 {SORT_OPTIONS.map(option => (
                     <button
                         key={option.value}
-                        onClick={() => setSort(option.value)}
+                        onClick={() => handleSort(option.value)}
                         className={clsx(
                             "text-xs px-3 py-1.5 rounded-lg transition-colors",
                             sort === option.value

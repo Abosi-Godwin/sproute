@@ -11,6 +11,7 @@ import { Lead, MessageAngle, OutreachStep } from "../../types";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { useUsageStore } from "../../lib/stores/useUsageStore";
+import { posthog } from "../../lib/posthog";
 
 import {
     useGenerateMessages,
@@ -70,14 +71,40 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     );
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
+    const number = lead.whatsappNumber || lead.phone;
+
     useEffect(() => {
         resetIfNewDay();
     }, [resetIfNewDay]);
 
+    useEffect(() => {
+        if (!error) return;
+        posthog.capture("generation_failed", {
+            lead_id: lead.id,
+            message: String(error)
+        });
+    }, [error]);
+
+    useEffect(() => {
+        if (!showUpgrade) return;
+        posthog.capture("upgrade_modal_shown", {
+            source: "message_generator",
+            lead_id: lead.id
+        });
+    }, [showUpgrade]);
+
     const handleGenerate = async () => {
         resetIfNewDay();
+        const regenerate = messages.length > 0;
         const results = await generate();
-        if (results) setMessages(results);
+        if (results) {
+            posthog.capture("messages_generated", {
+                lead_id: lead.id,
+                regenerate,
+                count: results.length
+            });
+            setMessages(results);
+        }
     };
 
     const handleCopy = async (
@@ -85,7 +112,19 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
         msgId: string,
         angle: MessageAngle
     ) => {
-        await copyText(text);
+        try {
+            await copyText(text);
+        } catch (err: any) {
+            posthog.capture("message_copy_failed", {
+                lead_id: lead.id,
+                angle,
+                message: err?.message ?? ""
+            });
+            toast.error("Couldn't copy. Select the text and copy it manually");
+            return;
+        }
+
+        posthog.capture("message_copied", { lead_id: lead.id, angle });
 
         setCopiedId(msgId);
         setTimeout(() => setCopiedId(null), 2000);
@@ -99,9 +138,15 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     };
 
     const handleWhatsApp = (text: string, angle?: MessageAngle) => {
-        const number = lead.whatsappNumber ?? lead.phone;
         if (!number) return;
         const phone = number.replace(/\D/g, "");
+
+        posthog.capture("message_sent", {
+            lead_id: lead.id,
+            angle,
+            channel: "whatsapp"
+        });
+
         window.open(
             `https://wa.me/${phone}?text=${encodeURIComponent(text)}`,
             "_blank"
@@ -233,7 +278,7 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
                                             </>
                                         )}
                                     </button>
-                                    {lead.phone && (
+                                    {number && (
                                         <button
                                             onClick={() =>
                                                 handleWhatsApp(
@@ -252,9 +297,9 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
                         );
                     })}
 
-                    {!lead.phone && (
+                    {!number && (
                         <p className="text-xs text-base-500 text-center">
-                            No phone number — copy and send manually.
+                            No phone number. Copy and send manually.
                         </p>
                     )}
                 </div>

@@ -17,7 +17,7 @@
     "clsx": "latest",
     "framer-motion": "latest",
     "lucide-react": "latest",
-    "posthog-js": "^1.395.0",
+    "posthog-js": "^1.445.2",
     "react": "latest",
     "react-dom": "latest",
     "react-hot-toast": "^2.6.0",

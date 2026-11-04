@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Sparkles, Loader2, Mail, Check } from "lucide-react";
+import { posthog } from "../lib/posthog";
+import { Loader2, Mail, Check } from "lucide-react";
 
 export default function Login() {
     const [email, setEmail] = useState("");
@@ -22,8 +23,14 @@ export default function Login() {
 
         if (error) {
             setError(error.message);
+            posthog.capture("login_link_failed", {
+                email,
+                error: error.message,
+                status: error.status
+            });
         } else {
             setSent(true);
+            posthog.capture("login_link_requested", { email });
         }
 
         setIsLoading(false);
@@ -32,10 +39,8 @@ export default function Login() {
     return (
         <div className="min-h-screen bg-base-950 flex items-center justify-center p-6">
             <div className="w-full max-w-sm space-y-8">
-                {/* Logo */}
                 <div className="flex flex-col items-center gap-3">
                     <div className="w-14 h-14 rounded-2xl bg-brand-500 flex items-center justify-center">
-                       
                         <img src="/favicon.svg" alt="sproute logo" />
                     </div>
                     <div className="text-center">
@@ -48,7 +53,6 @@ export default function Login() {
                     </div>
                 </div>
 
-                {/* Form */}
                 {sent ? (
                     <div className="bg-base-900 border border-base-800 rounded-2xl p-6 text-center space-y-3">
                         <div className="w-12 h-12 rounded-full bg-brand-500/10 flex items-center justify-center mx-auto">
@@ -66,6 +70,7 @@ export default function Login() {
                         </div>
                         <button
                             onClick={() => {
+                                posthog.capture("login_use_different_email");
                                 setSent(false);
                                 setEmail("");
                             }}
@@ -81,7 +86,7 @@ export default function Login() {
                                 Sign in
                             </p>
                             <p className="text-sm text-base-400 mt-1">
-                                Enter your email — we'll send you a magic link.
+                                Enter your email and we'll send you a magic link.
                             </p>
                         </div>
 

@@ -17,7 +17,7 @@ export default function RootLayout() {
     const { fetchLeads, fetchActivity } = useLeadsStore();
     const location = useLocation();
 
-    // 1. Data fetching effect
+    
     useEffect(() => {
         if (user) {
             fetchLeads();
@@ -25,14 +25,14 @@ export default function RootLayout() {
         }
     }, [user]);
 
-    // 2. PostHog pageview tracking effect (MOVED OUT)
+   
     useEffect(() => {
         posthog.capture("$pageview", {
             $current_url: window.location.href
         });
     }, [location.pathname]);
 
-    // 3. Online/Offline status effect
+    
     useEffect(() => {
         const handleOffline = () =>
             toast.error("You are offline", {
