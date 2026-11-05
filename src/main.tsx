@@ -2,7 +2,12 @@ import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, RouterProvider, useLocation } from "react-router";
+import {
+    createBrowserRouter,
+    Outlet,
+    RouterProvider,
+    useLocation
+} from "react-router";
 
 import AuthProvider from "./components/layout/AuthProvider";
 import RootLayout from "./components/layout/RootLayout";
@@ -22,34 +27,39 @@ const queryClient = new QueryClient();
 initPostHog();
 inject();
 
-function PageViewTracker() {
+function TrackedRoot() {
     const location = useLocation();
 
     useEffect(() => {
         posthog.capture("$pageview", {
-            $current_url: window.location.href,
+            $current_url: window.location.href
         });
     }, [location.pathname]);
 
-    return null;
+    return <Outlet />;
 }
 
 const router = createBrowserRouter([
     {
-        path: "/login",
-        element: <Login />,
-    },
-    {
-        path: "/",
-        element: <RootLayout />,
+        element: <TrackedRoot />,
         children: [
-            { index: true, element: <Dashboard /> },
-            { path: "search", element: <Search /> },
-            { path: "leads", element: <Leads /> },
-            { path: "leads/:id", element: <LeadDetail /> },
-            { path: "settings", element: <Settings /> },
-        ],
-    },
+            {
+                path: "/login",
+                element: <Login />
+            },
+            {
+                path: "/",
+                element: <RootLayout />,
+                children: [
+                    { index: true, element: <Dashboard /> },
+                    { path: "search", element: <Search /> },
+                    { path: "leads", element: <Leads /> },
+                    { path: "leads/:id", element: <LeadDetail /> },
+                    { path: "settings", element: <Settings /> }
+                ]
+            }
+        ]
+    }
 ]);
 
 createRoot(document.getElementById("root")!).render(
