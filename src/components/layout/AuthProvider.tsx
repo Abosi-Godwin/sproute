@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../lib/stores/useAuthStore";
@@ -27,15 +27,26 @@ const trackSignup = (user: User) => {
     posthog.capture("signup_completed");
 };
 
+const resetStores = () => {
+    useSubscriptionStore.getState().reset();
+    useLeadsStore.getState().reset();
+};
+
 export default function AuthProvider({
     children
 }: {
     children: React.ReactNode;
 }) {
     const { setUser, setSession, setIsLoading } = useAuthStore();
+    const initializedFor = useRef<string | null>(null);
 
     useEffect(() => {
         const initializeUser = (user: User) => {
+            if (initializedFor.current === user.id) return;
+
+            if (initializedFor.current) resetStores();
+            initializedFor.current = user.id;
+
             useSubscriptionStore.getState().fetchSubscription();
             useLeadsStore.getState().fetchLeads();
             useLeadsStore.getState().fetchActivity();
@@ -62,20 +73,20 @@ export default function AuthProvider({
             data: { subscription }
         } = supabase.auth.onAuthStateChange((event, session) => {
             setSession(session);
-            setUser(session?.user ?? null);
+            if (event !== "TOKEN_REFRESHED") {
+                setUser(session?.user ?? null);
+            }
             setIsLoading(false);
 
-            if (
-                session?.user &&
-                (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")
-            ) {
-                initializeUser(session.user);
+            if (event === "SIGNED_OUT") {
+                initializedFor.current = null;
+                posthog.reset();
+                resetStores();
+                return;
             }
 
-            if (event === "SIGNED_OUT") {
-                posthog.reset();
-                useSubscriptionStore.getState().reset();
-                useLeadsStore.getState().reset();
+            if (session?.user) {
+                initializeUser(session.user);
             }
         });
 

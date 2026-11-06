@@ -12,6 +12,7 @@ import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../lib/stores/useSettingsStore";
 import { useUsageStore } from "../../lib/stores/useUsageStore";
 import { posthog } from "../../lib/posthog";
+import { openWhatsApp, pickWhatsAppNumber } from "../../utils/phone";
 
 import {
     useGenerateMessages,
@@ -71,7 +72,7 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
     );
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const number = lead.whatsappNumber || lead.phone;
+    const number = pickWhatsAppNumber(lead);
 
     useEffect(() => {
         resetIfNewDay();
@@ -139,18 +140,16 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
 
     const handleWhatsApp = (text: string, angle?: MessageAngle) => {
         if (!number) return;
-        const phone = number.replace(/\D/g, "");
 
         posthog.capture("message_sent", {
             lead_id: lead.id,
             angle,
-            channel: "whatsapp"
+            channel: "whatsapp",
+            source: "message_generator"
         });
 
-        window.open(
-            `https://wa.me/${phone}?text=${encodeURIComponent(text)}`,
-            "_blank"
-        );
+        openWhatsApp(number, text);
+
         if (angle) {
             setSelectedMessageAngle(lead.id, angle);
             setLastOutreachStep(lead.id, `initial_${angle}` as OutreachStep);
@@ -299,7 +298,9 @@ export default function MessageGenerator({ lead }: { lead: Lead }) {
 
                     {!number && (
                         <p className="text-xs text-base-500 text-center">
-                            No phone number. Copy and send manually.
+                            {lead.phone
+                                ? "The saved number looks like a landline. Add a WhatsApp number above, or copy and send manually."
+                                : "No number saved. Add a WhatsApp number above, or copy and send manually."}
                         </p>
                     )}
                 </div>

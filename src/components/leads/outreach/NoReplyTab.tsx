@@ -7,15 +7,19 @@ import { useSettingsStore } from "../../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../../utils/painPoints";
 import { useUsageStore } from "../../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../../lib/stores/useSubscriptionStore";
+import { posthog } from "../../../lib/posthog";
+import { openWhatsApp, pickWhatsAppNumber } from "../../../utils/phone";
 import UpgradeModal from "../../ui/UpgradeModal";
 import { copyText, CopyBtn } from "./outreachUtils";
 
+type SequenceId = "day3" | "day7" | "day14";
+
 function getDay14(tone: string, businessName: string): string {
     if (tone === "pidgin") {
-        return `E go be my last message so I no go dey disturb your inbox.\n\nIf you ever wan explore wetin website fit do for ${businessName}, just reply this message — I go dey here.\n\nAll the best.`;
+        return `E go be my last message so I no go dey disturb your inbox.\n\nIf you ever wan explore wetin website fit do for ${businessName}, just reply this message and I go dey here.\n\nAll the best.`;
     }
     if (tone === "formal") {
-        return `This will be my final follow-up as I do not want to take up too much of your time.\n\nShould you ever wish to explore what a website could do for ${businessName}, please do not hesitate to reach out — I will be happy to continue from where we left off.`;
+        return `This will be my final follow-up as I do not want to take up too much of your time.\n\nShould you ever wish to explore what a website could do for ${businessName}, please do not hesitate to reach out. I will be happy to continue from where we left off.`;
     }
     return `Hey, this will be my last message so I don't keep filling up your inbox.\n\nIf a website for ${businessName} is something you'd ever want to explore, just reply to this and we'll pick it up from here.\n\nAll the best.`;
 }
@@ -35,7 +39,7 @@ function SequenceBtn({
     setFollowUpDate
 }: {
     text: string;
-    number?: string;
+    number?: string | null;
     step: OutreachStep;
     leadId: string;
     setLastOutreachStep: (id: string, step: OutreachStep) => Promise<void>;
@@ -44,14 +48,17 @@ function SequenceBtn({
     if (!number) return null;
 
     const handleClick = () => {
-        const clean = number.replace(/\D/g, "");
-        window.open(
-            `https://wa.me/${clean}?text=${encodeURIComponent(text)}`,
-            "_blank"
-        );
+        posthog.capture("message_sent", {
+            lead_id: leadId,
+            channel: "whatsapp",
+            source: "no_reply_sequence",
+            step
+        });
+        openWhatsApp(number, text);
         setLastOutreachStep(leadId, step);
-        if (step === "day3") setFollowUpDate(leadId, addDays(2));
-        if (step === "day7") setFollowUpDate(leadId, addDays(2));
+        if (step === "day3" || step === "day7") {
+            setFollowUpDate(leadId, addDays(2));
+        }
     };
 
     return (
@@ -93,16 +100,36 @@ export default function NoReplyTab({ lead }: { lead: Lead }) {
     const [showUpgrade, setShowUpgrade] = useState(false);
 
     const pro = isPro();
-    const whatsappNumber = lead.whatsappNumber ?? lead.phone;
+    const number = pickWhatsAppNumber(lead);
     const painContext = lead.painPoints
         ? painPointsToContext(lead.painPoints)
         : "No specific signals";
     const day14 = getDay14(outreachTone, lead.name);
     const showSequenceBlock = isLoading || sequence !== null;
 
+    const blocks: {
+        id: SequenceId;
+        title: string;
+        text: string;
+        badge?: string;
+    }[] = [
+        { id: "day3", title: "Day 3: Check in", text: sequence?.day3 ?? "" },
+        { id: "day7", title: "Day 7: Add value", text: sequence?.day7 ?? "" },
+        {
+            id: "day14",
+            title: "Day 14: Final message",
+            text: day14,
+            badge: "Static"
+        }
+    ];
+
     const generate = async () => {
         resetIfNewDay();
         if (!canGenerateAi(pro)) {
+            posthog.capture("upgrade_modal_shown", {
+                source: "no_reply_sequence",
+                lead_id: lead.id
+            });
             setShowUpgrade(true);
             return;
         }
@@ -125,21 +152,44 @@ Notes: ${lead.notes || "none"}`
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to generate");
+            if (!res.ok) throw new Error(data.error || `status_${res.status}`);
+            if (!data?.day3 || !data?.day7) {
+                throw new Error("incomplete_sequence");
+            }
 
             setSequence(data);
             await saveFollowUpSequence(lead.id, data);
             incrementAiGenerations();
+            posthog.capture("sequence_generated", {
+                lead_id: lead.id,
+                regenerate: sequence !== null
+            });
             toast.success("Sequence generated");
-        } catch {
-            toast.error("Generation failed — try again");
+        } catch (err: any) {
+            posthog.capture("generation_failed", {
+                lead_id: lead.id,
+                feature: "no_reply_sequence",
+                message: err?.message ?? ""
+            });
+            toast.error("Generation failed. Try again");
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleCopy = async (text: string, id: string) => {
-        await copyText(text);
+        try {
+            await copyText(text);
+        } catch {
+            toast.error("Couldn't copy. Select the text and copy it manually");
+            return;
+        }
+
+        posthog.capture("message_copied", {
+            lead_id: lead.id,
+            source: "no_reply_sequence",
+            step: id
+        });
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
         toast.success("Copied");
@@ -170,109 +220,59 @@ Notes: ${lead.notes || "none"}`
 
             {showSequenceBlock && (
                 <div className="space-y-3">
-                    <div className="border border-base-800 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-semibold text-base-400">
-                            Day 3 — Check in
-                        </p>
-                        {isLoading ? (
-                            <MessageSkeleton />
-                        ) : (
-                            <>
-                                <p className="text-sm text-base-200 leading-relaxed whitespace-pre-line">
-                                    {sequence?.day3}
+                    {blocks.map(block => (
+                        <div
+                            key={block.id}
+                            className={`border border-base-800 rounded-xl p-4 space-y-3 ${
+                                block.badge ? "opacity-75" : ""
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-base-400">
+                                    {block.title}
                                 </p>
-                                <div className="flex items-center gap-2">
-                                    <CopyBtn
-                                        text={sequence!.day3}
-                                        id="day3"
-                                        copiedId={copiedId}
-                                        onCopy={handleCopy}
-                                    />
-                                    <SequenceBtn
-                                        text={sequence!.day3}
-                                        number={whatsappNumber}
-                                        step="day3"
-                                        leadId={lead.id}
-                                        setLastOutreachStep={
-                                            setLastOutreachStep
-                                        }
-                                        setFollowUpDate={setFollowUpDate}
-                                    />
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div className="border border-base-800 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-semibold text-base-400">
-                            Day 7 — Add value
-                        </p>
-                        {isLoading ? (
-                            <MessageSkeleton />
-                        ) : (
-                            <>
-                                <p className="text-sm text-base-200 leading-relaxed whitespace-pre-line">
-                                    {sequence?.day7}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <CopyBtn
-                                        text={sequence!.day7}
-                                        id="day7"
-                                        copiedId={copiedId}
-                                        onCopy={handleCopy}
-                                    />
-                                    <SequenceBtn
-                                        text={sequence!.day7}
-                                        number={whatsappNumber}
-                                        step="day7"
-                                        leadId={lead.id}
-                                        setLastOutreachStep={
-                                            setLastOutreachStep
-                                        }
-                                        setFollowUpDate={setFollowUpDate}
-                                    />
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div className="border border-base-800 rounded-xl p-4 space-y-3 opacity-75">
-                        <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold text-base-400">
-                                Day 14 — Final message
-                            </p>
-                            <span className="text-xs text-base-600">
-                                Static
-                            </span>
+                                {block.badge && (
+                                    <span className="text-xs text-base-600">
+                                        {block.badge}
+                                    </span>
+                                )}
+                            </div>
+                            {isLoading ? (
+                                <MessageSkeleton />
+                            ) : (
+                                <>
+                                    <p className="text-sm text-base-200 leading-relaxed whitespace-pre-line">
+                                        {block.text}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <CopyBtn
+                                            text={block.text}
+                                            id={block.id}
+                                            copiedId={copiedId}
+                                            onCopy={handleCopy}
+                                        />
+                                        <SequenceBtn
+                                            text={block.text}
+                                            number={number}
+                                            step={block.id}
+                                            leadId={lead.id}
+                                            setLastOutreachStep={
+                                                setLastOutreachStep
+                                            }
+                                            setFollowUpDate={setFollowUpDate}
+                                        />
+                                    </div>
+                                </>
+                            )}
                         </div>
-                        {isLoading ? (
-                            <MessageSkeleton />
-                        ) : (
-                            <>
-                                <p className="text-sm text-base-200 leading-relaxed whitespace-pre-line">
-                                    {day14}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <CopyBtn
-                                        text={day14}
-                                        id="day14"
-                                        copiedId={copiedId}
-                                        onCopy={handleCopy}
-                                    />
-                                    <SequenceBtn
-                                        text={day14}
-                                        number={whatsappNumber}
-                                        step="day14"
-                                        leadId={lead.id}
-                                        setLastOutreachStep={
-                                            setLastOutreachStep
-                                        }
-                                        setFollowUpDate={setFollowUpDate}
-                                    />
-                                </div>
-                            </>
-                        )}
-                    </div>
+                    ))}
+
+                    {!number && !isLoading && (
+                        <p className="text-xs text-base-500 text-center">
+                            No WhatsApp-ready number on this lead. Add a mobile
+                            number above, or copy and send manually.
+                        </p>
+                    )}
                 </div>
             )}
 

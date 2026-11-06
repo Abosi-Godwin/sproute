@@ -1,45 +1,53 @@
-import { useEffect } from "react";
-import { Outlet, useLocation, Navigate } from "react-router";
+import { useEffect, useRef } from "react";
+import { Outlet, Navigate } from "react-router";
 import toast from "react-hot-toast";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import OnboardingOverlay from "../onboarding/OnboardingOverlay";
 import ScrollToTop from "./ScrollToTop";
+import { supabase } from "../../lib/supabase";
 import { useUIStore } from "../../lib/stores/useUIStore";
 import { useAuthStore } from "../../lib/stores/useAuthStore";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { Loader2 } from "lucide-react";
-import { posthog } from "../../lib/posthog";
 
 export default function RootLayout() {
     const { hasOnboarded } = useUIStore();
     const { user, isLoading } = useAuthStore();
-    const { fetchLeads, fetchActivity } = useLeadsStore();
-    const location = useLocation();
+    const { leads, hasLoaded } = useLeadsStore();
+    const onboardingShown = useRef(false);
 
-    
+    const flaggedOnAccount = user?.user_metadata?.onboarded === true;
+    const showOnboarding =
+        Boolean(user) &&
+        hasLoaded &&
+        !hasOnboarded &&
+        !flaggedOnAccount &&
+        leads.length === 0;
+
     useEffect(() => {
-        if (user) {
-            fetchLeads();
-            fetchActivity();
+        if (showOnboarding) {
+            onboardingShown.current = true;
+            return;
         }
-    }, [user]);
+        if (
+            !onboardingShown.current ||
+            !hasOnboarded ||
+            !user ||
+            flaggedOnAccount
+        )
+            return;
+        onboardingShown.current = false;
+        supabase.auth.updateUser({ data: { onboarded: true } }).catch(() => {});
+    }, [showOnboarding, hasOnboarded, user?.id, flaggedOnAccount]);
 
-   
-    useEffect(() => {
-        posthog.capture("$pageview", {
-            $current_url: window.location.href
-        });
-    }, [location.pathname]);
-
-    
     useEffect(() => {
         const handleOffline = () =>
             toast.error("You are offline", {
                 duration: Infinity,
                 id: "offline"
             });
-            
+
         const handleOnline = () => {
             toast.dismiss("offline");
             toast.success("Back online");
@@ -47,7 +55,7 @@ export default function RootLayout() {
 
         window.addEventListener("offline", handleOffline);
         window.addEventListener("online", handleOnline);
-        
+
         return () => {
             window.removeEventListener("offline", handleOffline);
             window.removeEventListener("online", handleOnline);
@@ -69,7 +77,7 @@ export default function RootLayout() {
     return (
         <div className="flex h-screen overflow-hidden bg-base-950">
             <ScrollToTop />
-            {!hasOnboarded && <OnboardingOverlay />}
+            {showOnboarding && <OnboardingOverlay />}
             <div className="hidden md:block">
                 <Sidebar />
             </div>
