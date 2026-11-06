@@ -32,7 +32,7 @@
                 },
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' *.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.paystack.co https://checkout.paystack.com; frame-src https://checkout.paystack.com https://js.paystack.co; worker-src 'self' blob:;"
+                    "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' *.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.paystack.co https://checkout.paystack.com https://nominatim.openstreetmap.org; frame-src https://checkout.paystack.com https://js.paystack.co; worker-src 'self' blob:;"
                 }
             ]
         }
