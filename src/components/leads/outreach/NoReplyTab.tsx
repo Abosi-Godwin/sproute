@@ -7,12 +7,20 @@ import { useSettingsStore } from "../../../lib/stores/useSettingsStore";
 import { painPointsToContext } from "../../../utils/painPoints";
 import { useUsageStore } from "../../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../../lib/stores/useSubscriptionStore";
+import { callAi } from "../../../lib/ai";
 import { posthog } from "../../../lib/posthog";
 import { openWhatsApp, pickWhatsAppNumber } from "../../../utils/phone";
 import UpgradeModal from "../../ui/UpgradeModal";
 import { copyText, CopyBtn } from "./outreachUtils";
 
 type SequenceId = "day3" | "day7" | "day14";
+
+const aiErrorMessage = (status: number) => {
+    if (status === 401) return "Please sign in again to continue";
+    if (status === 429 || status === 503)
+        return "The AI is busy right now. Try again in a minute";
+    return "Generation failed. Try again";
+};
 
 function getDay14(tone: string, businessName: string): string {
     if (tone === "pidgin") {
@@ -84,8 +92,7 @@ function MessageSkeleton() {
 
 export default function NoReplyTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
-    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } =
-        useUsageStore();
+    const { canGenerateAi, resetIfNewDay } = useUsageStore();
     const { isPro } = useSubscriptionStore();
     const { saveFollowUpSequence, setLastOutreachStep, setFollowUpDate } =
         useLeadsStore();
@@ -123,43 +130,61 @@ export default function NoReplyTab({ lead }: { lead: Lead }) {
         }
     ];
 
+    const openUpgrade = (source: "local" | "server") => {
+        posthog.capture("ai_limit_reached", {
+            lead_id: lead.id,
+            feature: "no_reply_sequence",
+            source
+        });
+        posthog.capture("upgrade_modal_shown", {
+            source: "no_reply_sequence",
+            lead_id: lead.id
+        });
+        setShowUpgrade(true);
+    };
+
     const generate = async () => {
         resetIfNewDay();
         if (!canGenerateAi(pro)) {
-            posthog.capture("upgrade_modal_shown", {
-                source: "no_reply_sequence",
-                lead_id: lead.id
-            });
-            setShowUpgrade(true);
+            openUpgrade("local");
             return;
         }
 
         setIsLoading(true);
         try {
-            const res = await fetch("/api/gemini", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    scenario: "no_reply_sequence",
-                    tone: outreachTone,
-                    service: serviceDescription || "web development",
-                    leadData: `Business: ${lead.name}
+            const result = await callAi({
+                scenario: "no_reply_sequence",
+                tone: outreachTone,
+                service: serviceDescription || "web development",
+                leadData: `Business: ${lead.name}
 Category: ${lead.category}
 Has website: ${lead.website ? "yes" : "no"}
 Business signals: ${painContext}
 Notes: ${lead.notes || "none"}`
-                })
             });
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `status_${res.status}`);
+            if (result.limitReached) {
+                openUpgrade("server");
+                return;
+            }
+
+            if (!result.ok) {
+                posthog.capture("generation_failed", {
+                    lead_id: lead.id,
+                    feature: "no_reply_sequence",
+                    message: result.error || `status_${result.status}`
+                });
+                toast.error(aiErrorMessage(result.status));
+                return;
+            }
+
+            const data = result.data;
             if (!data?.day3 || !data?.day7) {
                 throw new Error("incomplete_sequence");
             }
 
             setSequence(data);
             await saveFollowUpSequence(lead.id, data);
-            incrementAiGenerations();
             posthog.capture("sequence_generated", {
                 lead_id: lead.id,
                 regenerate: sequence !== null

@@ -14,15 +14,22 @@ import { useLeadsStore } from "../../../lib/stores/useLeadsStore";
 import { useSettingsStore } from "../../../lib/stores/useSettingsStore";
 import { useUsageStore } from "../../../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../../../lib/stores/useSubscriptionStore";
+import { callAi } from "../../../lib/ai";
 import { posthog } from "../../../lib/posthog";
 import { openWhatsApp, pickWhatsAppNumber } from "../../../utils/phone";
 import UpgradeModal from "../../ui/UpgradeModal";
 import { copyText } from "./outreachUtils";
 
+const aiErrorMessage = (status: number) => {
+    if (status === 401) return "Please sign in again to continue";
+    if (status === 429 || status === 503)
+        return "The AI is busy right now. Try again in a minute";
+    return "Could not generate reply. Try again";
+};
+
 export default function ChatHelperTab({ lead }: { lead: Lead }) {
     const { outreachTone, serviceDescription } = useSettingsStore();
-    const { canGenerateAi, incrementAiGenerations, resetIfNewDay } =
-        useUsageStore();
+    const { canGenerateAi, resetIfNewDay } = useUsageStore();
     const { isPro } = useSubscriptionStore();
     const { saveChatHistory } = useLeadsStore();
 
@@ -45,17 +52,26 @@ export default function ChatHelperTab({ lead }: { lead: Lead }) {
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }, [history, isLoading]);
 
+    const openUpgrade = (source: "local" | "server") => {
+        posthog.capture("ai_limit_reached", {
+            lead_id: lead.id,
+            feature: "chat_helper",
+            source
+        });
+        posthog.capture("upgrade_modal_shown", {
+            source: "chat_helper",
+            lead_id: lead.id
+        });
+        setShowUpgrade(true);
+    };
+
     const handleSend = async () => {
         const trimmed = input.trim();
         if (!trimmed || isLoading) return;
 
         resetIfNewDay();
         if (!canGenerateAi(pro)) {
-            posthog.capture("upgrade_modal_shown", {
-                source: "chat_helper",
-                lead_id: lead.id
-            });
-            setShowUpgrade(true);
+            openUpgrade("local");
             return;
         }
 
@@ -77,21 +93,36 @@ export default function ChatHelperTab({ lead }: { lead: Lead }) {
                 .map(m => `${m.role}: ${m.text}`)
                 .join("\n");
 
-            const res = await fetch("/api/gemini", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    scenario: "chat_helper_reply",
-                    tone: outreachTone,
-                    service: serviceDescription,
-                    leadData: `Context: Business is ${lead.name}.\n\nChat History:\n${conversationContext}`
-                })
+            const result = await callAi({
+                scenario: "chat_helper_reply",
+                tone: outreachTone,
+                service: serviceDescription,
+                leadData: `Context: Business is ${lead.name}.\n\nChat History:\n${conversationContext}`
             });
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || `status_${res.status}`);
+            if (result.limitReached) {
+                setHistory(previous);
+                setInput(trimmed);
+                openUpgrade("server");
+                return;
+            }
 
-            const reply = typeof data.text === "string" ? data.text.trim() : "";
+            if (!result.ok) {
+                posthog.capture("generation_failed", {
+                    lead_id: lead.id,
+                    feature: "chat_helper",
+                    message: result.error || `status_${result.status}`
+                });
+                toast.error(aiErrorMessage(result.status));
+                setHistory(previous);
+                setInput(trimmed);
+                return;
+            }
+
+            const reply =
+                typeof result.data?.text === "string"
+                    ? result.data.text.trim()
+                    : "";
             if (!reply) throw new Error("empty_reply");
 
             const finalHistory: ChatMessage[] = [
@@ -104,7 +135,6 @@ export default function ChatHelperTab({ lead }: { lead: Lead }) {
             ];
             setHistory(finalHistory);
             await saveChatHistory(lead.id, finalHistory);
-            incrementAiGenerations();
             posthog.capture("chat_reply_generated", {
                 lead_id: lead.id,
                 turns: finalHistory.length
@@ -132,21 +162,16 @@ export default function ChatHelperTab({ lead }: { lead: Lead }) {
                 .map(m => `${m.role}: ${m.text}`)
                 .join("\n");
 
-            const res = await fetch("/api/gemini", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    scenario: "chat_helper_summary",
-                    leadData: conversationContext
-                })
+            const result = await callAi({
+                scenario: "chat_helper_summary",
+                leadData: conversationContext
             });
 
-            const data = await res.json();
-            if (!res.ok || typeof data.text !== "string") {
-                throw new Error(data?.error || "summary_failed");
+            if (!result.ok || typeof result.data?.text !== "string") {
+                throw new Error(result.error || "summary_failed");
             }
 
-            await copyText(data.text.trim());
+            await copyText(result.data.text.trim());
             toast.success("Summary copied");
         } catch {
             toast.error("Could not generate summary");

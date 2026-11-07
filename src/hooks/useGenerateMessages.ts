@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useLeadsStore } from "../lib/stores/useLeadsStore";
 import { useUsageStore } from "../lib/stores/useUsageStore";
 import { useSubscriptionStore } from "../lib/stores/useSubscriptionStore";
+import { callAi } from "../lib/ai";
 import { painPointsToContext } from "../utils/painPoints";
 import { posthog } from "../lib/posthog";
 import { Lead, MessageAngle } from "../types";
@@ -15,14 +16,16 @@ export interface GeneratedMessage {
 const TIMEOUT_MS = 45000;
 const GENERIC_ERROR = "Generation failed. Try again";
 
-const messageForStatus = (status: number) =>
-    status === 429
-        ? "The AI is busy right now. Try again in a minute"
-        : GENERIC_ERROR;
+const messageForStatus = (status: number) => {
+    if (status === 401) return "Please sign in again to continue";
+    if (status === 429 || status === 503)
+        return "The AI is busy right now. Try again in a minute";
+    return GENERIC_ERROR;
+};
 
 export function useGenerateMessages(lead: Lead, tone: string, service: string) {
     const { saveGeneratedMessage } = useLeadsStore();
-    const { canGenerateAi, incrementAiGenerations } = useUsageStore();
+    const { canGenerateAi } = useUsageStore();
     const { isPro } = useSubscriptionStore();
     const pro = isPro();
 
@@ -35,6 +38,11 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
         if (inFlight.current) return null;
 
         if (!canGenerateAi(pro)) {
+            posthog.capture("ai_limit_reached", {
+                lead_id: lead.id,
+                feature: "message_generator",
+                source: "local"
+            });
             setShowUpgrade(true);
             return null;
         }
@@ -63,36 +71,38 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
                 `Notes: ${lead.notes || "none"}`
             ].join("\n");
 
-            const res = await fetch("/api/gemini", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                signal: controller.signal,
-                body: JSON.stringify({
+            const result = await callAi(
+                {
                     scenario: "message_generator",
                     tone,
                     service: service.trim() || "web development",
                     leadData: leadContext
-                })
-            });
+                },
+                controller.signal
+            );
 
-            let data: any = null;
-            try {
-                data = await res.json();
-            } catch {
-                data = null;
-            }
-
-            if (!res.ok) {
-                posthog.capture("generation_request_failed", {
+            if (result.limitReached) {
+                posthog.capture("ai_limit_reached", {
                     lead_id: lead.id,
-                    status: res.status,
-                    detail: typeof data?.error === "string" ? data.error : "",
-                    duration_ms: Date.now() - startedAt
+                    feature: "message_generator",
+                    source: "server"
                 });
-                setError(messageForStatus(res.status));
+                setShowUpgrade(true);
                 return null;
             }
 
+            if (!result.ok) {
+                posthog.capture("generation_request_failed", {
+                    lead_id: lead.id,
+                    status: result.status,
+                    detail: result.error,
+                    duration_ms: Date.now() - startedAt
+                });
+                setError(messageForStatus(result.status));
+                return null;
+            }
+
+            const data = result.data;
             const texts = [data?.curiosity, data?.friendly, data?.direct];
             const complete = texts.every(
                 t => typeof t === "string" && t.trim().length > 0
@@ -101,7 +111,7 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
             if (!complete) {
                 posthog.capture("generation_request_failed", {
                     lead_id: lead.id,
-                    status: res.status,
+                    status: result.status,
                     detail: "incomplete_response",
                     duration_ms: Date.now() - startedAt
                 });
@@ -123,7 +133,6 @@ export function useGenerateMessages(lead: Lead, tone: string, service: string) {
                 lead.id,
                 JSON.stringify({ curiosity, friendly, direct })
             );
-            incrementAiGenerations();
 
             return generated;
         } catch (err: any) {
