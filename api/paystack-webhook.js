@@ -1,70 +1,97 @@
-import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import crypto from "crypto";
+import { getAdmin, grantPro, paymentProblem, findUserId } from "./_paystack.js";
+
+const signatureValid = (body, signature, secret) => {
+    if (typeof signature !== "string") return false;
+
+    const expected = crypto
+        .createHmac("sha512", secret)
+        .update(JSON.stringify(body))
+        .digest("hex");
+
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signature);
+
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method not allowed' });
+    res.setHeader("Cache-Control", "no-store");
+
+    if (req.method !== "POST") {
+        res.setHeader("Allow", "POST");
+        return res.status(405).json({ message: "Method not allowed" });
     }
 
-    const hash = crypto
-        .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-        .update(JSON.stringify(req.body))
-        .digest('hex');
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    const db = getAdmin();
 
-    if (hash !== req.headers['x-paystack-signature']) {
-        return res.status(401).json({ message: 'Invalid signature' });
+    if (!secret || !db) {
+        console.error("Paystack webhook is not configured", {
+            paystack: Boolean(secret),
+            supabase: Boolean(db)
+        });
+        return res.status(500).json({ message: "Webhook not configured" });
+    }
+
+    if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ message: "Invalid body" });
+    }
+
+    if (!signatureValid(req.body, req.headers["x-paystack-signature"], secret)) {
+        return res.status(401).json({ message: "Invalid signature" });
     }
 
     const { event, data } = req.body;
 
-    const supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
     try {
-        if (event === 'charge.success' || event === 'subscription.create') {
-            const email = data.customer?.email;
-            if (!email) return res.status(200).json({ received: true });
+        if (event === "charge.success") {
+            const reference =
+                typeof data?.reference === "string" ? data.reference : "";
 
-            const { data: userId, error: lookupError } = await supabase
-                .rpc('get_user_id_by_email', { lookup_email: email });
-
-            if (lookupError) throw lookupError;
-            if (!userId) {
-                return res.status(200).json({ received: true, note: 'No matching user' });
+            if (!reference) {
+                console.error("Charge without reference");
+                return res.status(200).json({ received: true });
             }
 
-            const periodEnd = new Date();
-            periodEnd.setDate(periodEnd.getDate() + 30);
+            const problem = paymentProblem(data);
+            if (problem) {
+                console.error("Ignored charge:", problem, reference);
+                return res.status(200).json({ received: true });
+            }
 
-            await supabase.from('subscriptions').upsert({
-                user_id: userId,
-                plan: 'pro',
-                status: 'active',
-                paystack_customer_code: data.customer.customer_code,
-                paystack_subscription_code: data.subscription_code ?? null,
-                current_period_end: periodEnd.toISOString(),
-            }, { onConflict: 'user_id' });
+            const result = await grantPro(db, {
+                reference,
+                email: data.customer?.email,
+                amount: data.amount,
+                currency: data.currency,
+                customerCode: data.customer?.customer_code,
+                subscriptionCode: data.subscription_code,
+                source: "webhook"
+            });
+
+            if (!result.ok) {
+                console.error("Paid but no matching user:", reference);
+            }
         }
 
-        if (event === 'subscription.disable' || event === 'subscription.not_renew') {
-            const email = data.customer?.email;
-            if (!email) return res.status(200).json({ received: true });
-
-            const { data: userId } = await supabase
-                .rpc('get_user_id_by_email', { lookup_email: email });
+        if (event === "subscription.create") {
+            const code = data?.subscription_code;
+            const userId = code
+                ? await findUserId(db, data?.customer?.email)
+                : null;
 
             if (userId) {
-                await supabase.from('subscriptions')
-                    .update({ plan: 'free', status: 'cancelled' })
-                    .eq('user_id', userId);
+                await db
+                    .from("subscriptions")
+                    .update({ paystack_subscription_code: code })
+                    .eq("user_id", userId);
             }
         }
 
-        res.status(200).json({ received: true });
+        return res.status(200).json({ received: true });
     } catch (err) {
-        console.error('Webhook error:', err);
-        res.status(500).json({ message: 'Webhook processing failed' });
+        console.error("Webhook error:", err?.message ?? err);
+        return res.status(500).json({ message: "Webhook processing failed" });
     }
 }
