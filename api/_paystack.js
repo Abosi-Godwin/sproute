@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 const PERIOD_DAYS = 30;
+const GRACE_DAYS = 3;
+const UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const getAdmin = () => {
     const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -14,8 +17,34 @@ export const getAdmin = () => {
 export const normalizeEmail = email =>
     typeof email === "string" ? email.trim().toLowerCase() : "";
 
+export const metadataUserId = tx => {
+    const id = tx?.metadata?.user_id;
+    return typeof id === "string" && UUID.test(id) ? id.toLowerCase() : null;
+};
+
+export const planCodeOf = tx => {
+    const plan = tx?.plan;
+    if (typeof plan === "string" && plan) return plan;
+    if (plan && typeof plan === "object" && typeof plan.plan_code === "string") {
+        return plan.plan_code;
+    }
+    const planObject = tx?.plan_object;
+    if (
+        planObject &&
+        typeof planObject === "object" &&
+        typeof planObject.plan_code === "string"
+    ) {
+        return planObject.plan_code;
+    }
+    return null;
+};
+
 export const paymentProblem = tx => {
     if (!tx || tx.status !== "success") return "not_successful";
+
+    if (tx.domain === "test" && process.env.PAYSTACK_ALLOW_TEST !== "true") {
+        return "test_mode_payment";
+    }
 
     const minAmount = Number(process.env.PAYSTACK_PRO_AMOUNT_KOBO);
     if (Number.isFinite(minAmount) && minAmount > 0) {
@@ -41,7 +70,7 @@ export const findUserId = async (db, email) => {
 };
 
 export const grantPro = async (db, payment) => {
-    const userId = await findUserId(db, payment.email);
+    const userId = payment.userId ?? (await findUserId(db, payment.email));
     if (!userId) return { ok: false, reason: "no_user" };
 
     const { error: claimError } = await db.from("paystack_payments").insert({
@@ -54,6 +83,7 @@ export const grantPro = async (db, payment) => {
 
     if (claimError) {
         if (claimError.code === "23505") return { ok: true, duplicate: true };
+        if (claimError.code === "23503") return { ok: false, reason: "no_user" };
         throw claimError;
     }
 
@@ -69,9 +99,17 @@ export const grantPro = async (db, payment) => {
         const existingEnd = current?.current_period_end
             ? new Date(current.current_period_end)
             : null;
-        const start = existingEnd && existingEnd > now ? existingEnd : now;
-        const end = new Date(start);
-        end.setDate(end.getDate() + PERIOD_DAYS);
+
+        let end;
+        if (payment.recurring) {
+            end = new Date(now);
+            end.setDate(end.getDate() + PERIOD_DAYS + GRACE_DAYS);
+            if (existingEnd && existingEnd > end) end = existingEnd;
+        } else {
+            const start = existingEnd && existingEnd > now ? existingEnd : now;
+            end = new Date(start);
+            end.setDate(end.getDate() + PERIOD_DAYS);
+        }
 
         const row = {
             user_id: userId,

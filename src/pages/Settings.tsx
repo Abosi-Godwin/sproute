@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
 import {
     Trash2,
@@ -11,13 +10,20 @@ import {
     Loader2,
     User,
     LogOut,
-    Sparkles
+    Sparkles,
+    ExternalLink
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../lib/stores/useAuthStore";
 import { useSettingsStore, OutreachTone } from "../lib/stores/useSettingsStore";
 import { useLeadsStore } from "../lib/stores/useLeadsStore";
 import { useSubscriptionStore } from "../lib/stores/useSubscriptionStore";
+import {
+    FREE_AI_LIMIT,
+    FREE_LEADS_LIMIT,
+    PRO_AI_LIMIT
+} from "../lib/stores/useUsageStore";
+import { posthog } from "../lib/posthog";
 import UpgradeModal from "../components/ui/UpgradeModal";
 import toast from "react-hot-toast";
 
@@ -41,6 +47,45 @@ const TONES: { value: OutreachTone; label: string; description: string }[] = [
     }
 ];
 
+const PAGE_SIZE = 1000;
+const BATCH_SIZE = 100;
+const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+
+const formatDate = (value: string | number | Date) =>
+    new Date(value).toLocaleDateString("en-NG", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+    });
+
+const normalizeUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const isRecord = (value: unknown): value is Record<string, any> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+const fetchAllRows = async (table: "leads" | "activity") => {
+    const rows: any[] = [];
+
+    for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+            .from(table)
+            .select("*")
+            .order("id", { ascending: true })
+            .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        rows.push(...(data ?? []));
+        if (!data || data.length < PAGE_SIZE) break;
+    }
+
+    return rows;
+};
+
 function SectionHeader({
     icon: Icon,
     title
@@ -57,27 +102,77 @@ function SectionHeader({
 }
 
 function AccountCard() {
-    const { currentPeriodEnd, fetchSubscription, isPro } = useSubscriptionStore();
-    const pro = isPro();
-    const [user, setUser] = useState<any>(null);
-    const [showUpgrade, setShowUpgrade] = useState(false);
-    const { signOut } = useAuthStore();
+    const { user, signOut } = useAuthStore();
+    const { currentPeriodEnd, hasSubscription, fetchSubscription, isPro } =
+        useSubscriptionStore();
     const {
-        serviceDescription, setServiceDescription,
-        portfolioUrl, setPortfolioUrl
+        serviceDescription,
+        setServiceDescription,
+        portfolioUrl,
+        setPortfolioUrl
     } = useSettingsStore();
+
+    const [showUpgrade, setShowUpgrade] = useState(false);
+    const [isOpeningManage, setIsOpeningManage] = useState(false);
     const [service, setService] = useState(serviceDescription);
     const [portfolio, setPortfolio] = useState(portfolioUrl);
 
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    }, []);
+    const pro = isPro();
+    const recurring = Boolean(
+        (import.meta.env.VITE_PAYSTACK_PLAN_CODE as string | undefined)?.trim()
+    );
+    const endDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
+    const lapsed = !pro && endDate !== null && endDate.getTime() < Date.now();
 
-    const renewalDate = currentPeriodEnd
-        ? new Date(currentPeriodEnd).toLocaleDateString("en-NG", {
-              day: "numeric", month: "long", year: "numeric"
-          })
-        : null;
+    const handleManage = async () => {
+        if (isOpeningManage) return;
+        setIsOpeningManage(true);
+
+        const popup = window.open("", "_blank");
+
+        try {
+            const {
+                data: { session }
+            } = await supabase.auth.getSession();
+
+            if (!session) {
+                popup?.close();
+                toast.error("Please sign in again");
+                return;
+            }
+
+            const res = await fetch("/api/paystack-manage", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session.access_token}`
+                }
+            });
+            const data = await res.json().catch(() => null);
+
+            if (!res.ok || typeof data?.link !== "string") {
+                popup?.close();
+                toast.error(
+                    data?.message ?? "Could not open subscription settings"
+                );
+                return;
+            }
+
+            posthog.capture("subscription_manage_opened");
+
+            if (popup) {
+                popup.opener = null;
+                popup.location.href = data.link;
+            } else {
+                window.location.assign(data.link);
+            }
+        } catch {
+            popup?.close();
+            toast.error("Could not open subscription settings");
+        } finally {
+            setIsOpeningManage(false);
+        }
+    };
 
     return (
         <div className="bg-base-900 border border-base-800 rounded-xl p-5 space-y-5">
@@ -90,11 +185,7 @@ function AccountCard() {
                 <p className="text-sm text-base-100">{user?.email}</p>
                 <p className="text-xs text-base-500">
                     Member since{" "}
-                    {user
-                        ? new Date(user.created_at).toLocaleDateString("en-NG", {
-                              day: "numeric", month: "long", year: "numeric"
-                          })
-                        : "..."}
+                    {user?.created_at ? formatDate(user.created_at) : "..."}
                 </p>
             </div>
 
@@ -103,35 +194,64 @@ function AccountCard() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                            <p className="text-xs font-semibold text-brand-400">Sproute Pro</p>
+                            <p className="text-xs font-semibold text-brand-400">
+                                Sproute Pro
+                            </p>
                         </div>
                         <span className="text-xs text-base-500">Active</span>
                     </div>
                     <p className="text-xs text-base-500">
-                        Unlimited leads · 50 AI generations/day
+                        Unlimited leads · {PRO_AI_LIMIT} AI generations/day
                     </p>
-                    {renewalDate && (
-                        <p className="text-xs text-base-600">Renews {renewalDate}</p>
+                    {endDate && (
+                        <p className="text-xs text-base-600">
+                            Pro until {formatDate(endDate)}
+                            {hasSubscription &&
+                                ". Renews automatically unless cancelled."}
+                        </p>
                     )}
-                    <button
-                        onClick={fetchSubscription}
-                        className="text-xs text-base-600 hover:text-base-400 transition-colors"
-                    >
-                        Refresh status
-                    </button>
+                    <div className="flex items-center gap-4 pt-1">
+                        {hasSubscription && (
+                            <button
+                                onClick={handleManage}
+                                disabled={isOpeningManage}
+                                className="flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300 disabled:opacity-50 transition-colors"
+                            >
+                                {isOpeningManage ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <ExternalLink className="w-3 h-3" />
+                                )}
+                                Manage or cancel
+                            </button>
+                        )}
+                        <button
+                            onClick={fetchSubscription}
+                            className="text-xs text-base-600 hover:text-base-400 transition-colors"
+                        >
+                            Refresh status
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div className="bg-base-800 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold text-base-400">Free plan</p>
-                        <span className="text-xs text-base-500">50 leads · 10 AI/day</span>
+                        <span className="text-xs text-base-500">
+                            {FREE_LEADS_LIMIT} leads · {FREE_AI_LIMIT} AI/day
+                        </span>
                     </div>
+                    {lapsed && endDate && (
+                        <p className="text-xs text-base-500">
+                            Your Pro plan ended on {formatDate(endDate)}.
+                        </p>
+                    )}
                     <button
                         onClick={() => setShowUpgrade(true)}
                         className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium py-2.5 rounded-lg transition-colors"
                     >
                         <Sparkles className="w-3.5 h-3.5" />
-                        Upgrade to Pro — ₦3,500/month
+                        Upgrade to Pro: ₦3,500 {recurring ? "per month" : "for 30 days"}
                     </button>
                 </div>
             )}
@@ -150,7 +270,9 @@ function AccountCard() {
                 />
                 <button
                     onClick={() => {
-                        setServiceDescription(service);
+                        const clean = service.trim();
+                        setServiceDescription(clean);
+                        setService(clean);
                         toast.success("Service saved");
                     }}
                     className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
@@ -173,7 +295,9 @@ function AccountCard() {
                 />
                 <button
                     onClick={() => {
-                        setPortfolioUrl(portfolio);
+                        const clean = normalizeUrl(portfolio);
+                        setPortfolioUrl(clean);
+                        setPortfolio(clean);
                         toast.success("Portfolio saved");
                     }}
                     className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
@@ -198,7 +322,8 @@ function AccountCard() {
 }
 
 export default function Settings() {
-    const { signOut } = useAuthStore();
+    const { user } = useAuthStore();
+    const { isPro } = useSubscriptionStore();
     const {
         defaultLocation,
         outreachTone,
@@ -207,125 +332,243 @@ export default function Settings() {
         setDefaultLocation,
         setOutreachTone,
         setFollowUpDays,
-        setDailyGoal,
+        setDailyGoal
     } = useSettingsStore();
 
     const { leads, activity, fetchLeads, fetchActivity } = useLeadsStore();
 
-    const [clearConfirm, setClearConfirm] = useState<"leads" | "activity" | null>(null);
+    const [clearConfirm, setClearConfirm] = useState<"leads" | "activity" | null>(
+        null
+    );
     const [importError, setImportError] = useState("");
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
 
+    const pro = isPro();
+
     const handleExport = async () => {
+        if (isExporting) return;
         setIsExporting(true);
+
         try {
-            const { data: leadsData } = await supabase.from("leads").select("*");
-            const { data: activityData } = await supabase.from("activity").select("*");
+            const [leadsData, activityData] = await Promise.all([
+                fetchAllRows("leads"),
+                fetchAllRows("activity")
+            ]);
+
             const backup = {
-                leads: leadsData ?? [],
-                activity: activityData ?? [],
+                leads: leadsData,
+                activity: activityData,
                 exportedAt: new Date().toISOString()
             };
+
             const blob = new Blob([JSON.stringify(backup, null, 2)], {
                 type: "application/json"
             });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `sproute-backup-${new Date().toLocaleDateString()}.json`;
+            link.download = `sproute-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
             link.click();
-            URL.revokeObjectURL(url);
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            posthog.capture("backup_exported", {
+                leads: leadsData.length,
+                activity: activityData.length
+            });
             toast.success("Backup exported");
-        } catch {
-            toast.error("Export failed — try again");
+        } catch (err: any) {
+            posthog.capture("backup_export_failed", {
+                message: err?.message ?? ""
+            });
+            toast.error("Export failed. Try again");
         } finally {
             setIsExporting(false);
         }
     };
 
     const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const input = e.target;
+        const file = input.files?.[0];
+        input.value = "";
+
+        if (!file || isImporting) return;
+
         setImportError("");
+
+        if (file.size > MAX_BACKUP_BYTES) {
+            setImportError("That file is too large to be a Sproute backup.");
+            return;
+        }
+
         setIsImporting(true);
+        let importedLeads = 0;
 
-        const reader = new FileReader();
-        reader.onload = async event => {
+        try {
+            let data: any;
             try {
-                const data = JSON.parse(event.target?.result as string);
-                if (!data.leads || !Array.isArray(data.leads)) {
-                    setImportError("Invalid backup file. Make sure it was exported from Sproute.");
-                    setIsImporting(false);
-                    return;
-                }
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return;
+                data = JSON.parse(await file.text());
+            } catch {
+                setImportError(
+                    "Could not read file. Make sure it is a valid JSON backup."
+                );
+                return;
+            }
 
-                if (data.leads.length > 0) {
-                    const leadsWithUser = data.leads.map((l: any) => ({
-                        ...l,
-                        user_id: user.id
-                    }));
-                    await supabase.from("leads").upsert(leadsWithUser);
-                }
-                if (data.activity?.length > 0) {
-                    const activityWithUser = data.activity.map((a: any) => ({
-                        ...a,
-                        user_id: user.id
-                    }));
-                    await supabase.from("activity").upsert(activityWithUser);
-                }
+            if (!isRecord(data) || !Array.isArray(data.leads)) {
+                setImportError(
+                    "Invalid backup file. Make sure it was exported from Sproute."
+                );
+                return;
+            }
 
+            if (!user) {
+                toast.error("Please sign in again to import");
+                return;
+            }
+
+            const incoming = data.leads.filter(
+                (row: any) =>
+                    isRecord(row) &&
+                    typeof row.id === "string" &&
+                    typeof row.name === "string"
+            );
+
+            if (incoming.length === 0) {
+                setImportError("No leads found in that file.");
+                return;
+            }
+
+            const existingIds = new Set(leads.map(l => l.id));
+            const known = incoming.filter((row: any) => existingIds.has(row.id));
+            const fresh = incoming.filter((row: any) => !existingIds.has(row.id));
+            const room = pro
+                ? fresh.length
+                : Math.max(0, FREE_LEADS_LIMIT - leads.length);
+            const addedFresh = fresh.slice(0, room);
+            const accepted = [...known, ...addedFresh];
+            const skipped = fresh.length - addedFresh.length;
+
+            if (accepted.length === 0) {
+                toast.error(
+                    `Your free plan holds ${FREE_LEADS_LIMIT} leads. Upgrade to Pro to import more.`
+                );
+                return;
+            }
+
+            const leadRows = accepted.map((row: any) => ({
+                ...row,
+                user_id: user.id
+            }));
+
+            for (let i = 0; i < leadRows.length; i += BATCH_SIZE) {
+                const batch = leadRows.slice(i, i + BATCH_SIZE);
+                const { error } = await supabase.from("leads").upsert(batch);
+                if (error) throw error;
+                importedLeads += batch.length;
+            }
+
+            const availableLeadIds = new Set([
+                ...existingIds,
+                ...accepted.map((row: any) => row.id)
+            ]);
+
+            const activityRows = Array.isArray(data.activity)
+                ? data.activity
+                      .filter(
+                          (row: any) =>
+                              isRecord(row) &&
+                              typeof row.id === "string" &&
+                              (!row.lead_id || availableLeadIds.has(row.lead_id))
+                      )
+                      .map((row: any) => ({ ...row, user_id: user.id }))
+                : [];
+
+            for (let i = 0; i < activityRows.length; i += BATCH_SIZE) {
+                const batch = activityRows.slice(i, i + BATCH_SIZE);
+                const { error } = await supabase.from("activity").upsert(batch);
+                if (error) throw error;
+            }
+
+            await fetchLeads();
+            await fetchActivity();
+
+            posthog.capture("backup_imported", {
+                leads: importedLeads,
+                skipped
+            });
+
+            if (skipped > 0) {
+                toast(
+                    `${importedLeads} leads imported. ${skipped} skipped because the free plan holds ${FREE_LEADS_LIMIT} leads.`,
+                    { duration: 8000 }
+                );
+            } else {
+                toast.success(`${importedLeads} leads imported`);
+            }
+        } catch (err: any) {
+            posthog.capture("backup_import_failed", {
+                imported: importedLeads,
+                message: err?.message ?? ""
+            });
+            setImportError(
+                importedLeads > 0
+                    ? `Import stopped after ${importedLeads} leads. Run the same file again to finish.`
+                    : "Import failed. Check the file and try again."
+            );
+            toast.error("Import failed");
+
+            if (importedLeads > 0) {
                 await fetchLeads();
                 await fetchActivity();
-                toast.success(`${data.leads.length} leads imported`);
-            } catch {
-                setImportError("Could not read file. Make sure it is a valid JSON backup.");
-                toast.error("Import failed — invalid file");
-            } finally {
-                setIsImporting(false);
             }
-        };
-        reader.readAsText(file);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleClearLeads = async () => {
+        if (!user || isClearing) return;
         setIsClearing(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { error } = await supabase
-                .from("leads")
-                .delete()
-                .eq("user_id", user.id);
-            if (!error) {
-                await fetchLeads();
-                await fetchActivity();
-                toast.success("All leads cleared");
-            } else {
-                toast.error("Couldn't clear leads");
-            }
+
+        const { error } = await supabase
+            .from("leads")
+            .delete()
+            .eq("user_id", user.id);
+
+        if (!error) {
+            await fetchLeads();
+            await fetchActivity();
+            posthog.capture("leads_cleared");
+            toast.success("All leads cleared");
+        } else {
+            toast.error("Couldn't clear leads");
         }
+
         setIsClearing(false);
         setClearConfirm(null);
     };
 
     const handleClearActivity = async () => {
+        if (!user || isClearing) return;
         setIsClearing(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { error } = await supabase
-                .from("activity")
-                .delete()
-                .eq("user_id", user.id);
-            if (!error) {
-                await fetchActivity();
-                toast.success("Activity cleared");
-            } else {
-                toast.error("Couldn't clear activity");
-            }
+
+        const { error } = await supabase
+            .from("activity")
+            .delete()
+            .eq("user_id", user.id);
+
+        if (!error) {
+            await fetchActivity();
+            posthog.capture("activity_cleared");
+            toast.success("Activity cleared");
+        } else {
+            toast.error("Couldn't clear activity");
         }
+
         setIsClearing(false);
         setClearConfirm(null);
     };
@@ -333,8 +576,12 @@ export default function Settings() {
     return (
         <div className="p-6 space-y-6 max-w-xl pb-24">
             <div>
-                <h1 className="font-display text-2xl font-bold text-base-50">Settings</h1>
-                <p className="text-sm text-base-400 mt-1">Manage your preferences and data</p>
+                <h1 className="font-display text-2xl font-bold text-base-50">
+                    Settings
+                </h1>
+                <p className="text-sm text-base-400 mt-1">
+                    Manage your preferences and data
+                </p>
             </div>
 
             <div className="bg-base-900 border border-base-800 rounded-xl p-5">
@@ -352,7 +599,9 @@ export default function Settings() {
                         >
                             <option value="">No default</option>
                             {LOCATIONS.map(loc => (
-                                <option key={loc} value={loc}>{loc}</option>
+                                <option key={loc} value={loc}>
+                                    {loc}
+                                </option>
                             ))}
                         </select>
                     </div>
@@ -360,7 +609,8 @@ export default function Settings() {
                     <div className="space-y-2 pt-4 border-t border-base-800">
                         <p className="text-sm text-base-100">Default Follow-up Days</p>
                         <p className="text-xs text-base-500">
-                            Auto-set follow-up date this many days after saving a lead.
+                            Auto-set the follow-up date this many days after you
+                            mark a lead as messaged.
                         </p>
                         <div className="flex items-center gap-2 flex-wrap">
                             {[1, 2, 3, 5, 7, 14].map(day => (
@@ -408,7 +658,8 @@ export default function Settings() {
             <div className="bg-base-900 border border-base-800 rounded-xl p-5">
                 <SectionHeader icon={MessageSquare} title="Outreach Tone" />
                 <p className="text-xs text-base-500 mb-4">
-                    Controls how the message generator writes your WhatsApp outreach.
+                    Controls how the message generator writes your WhatsApp
+                    outreach.
                 </p>
                 <div className="flex flex-col gap-2">
                     {TONES.map(tone => (
@@ -423,13 +674,19 @@ export default function Settings() {
                             )}
                         >
                             <div>
-                                <p className={clsx(
-                                    "text-sm font-medium",
-                                    outreachTone === tone.value ? "text-brand-400" : "text-base-200"
-                                )}>
+                                <p
+                                    className={clsx(
+                                        "text-sm font-medium",
+                                        outreachTone === tone.value
+                                            ? "text-brand-400"
+                                            : "text-base-200"
+                                    )}
+                                >
                                     {tone.label}
                                 </p>
-                                <p className="text-xs text-base-500 mt-0.5">{tone.description}</p>
+                                <p className="text-xs text-base-500 mt-0.5">
+                                    {tone.description}
+                                </p>
                             </div>
                             {outreachTone === tone.value && (
                                 <div className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />
@@ -444,12 +701,16 @@ export default function Settings() {
                 <div className="space-y-4">
                     <div className="flex items-center gap-4 py-3 border-b border-base-800">
                         <div className="text-center">
-                            <p className="font-display font-bold text-xl text-base-50">{leads.length}</p>
+                            <p className="font-display font-bold text-xl text-base-50">
+                                {leads.length}
+                            </p>
                             <p className="text-xs text-base-500">Leads</p>
                         </div>
                         <div className="w-px h-8 bg-base-800" />
                         <div className="text-center">
-                            <p className="font-display font-bold text-xl text-base-50">{activity.length}</p>
+                            <p className="font-display font-bold text-xl text-base-50">
+                                {activity.length}
+                            </p>
                             <p className="text-xs text-base-500">Activities</p>
                         </div>
                     </div>
@@ -459,40 +720,59 @@ export default function Settings() {
                         disabled={isExporting}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-base-800 hover:bg-base-700 disabled:opacity-50 transition-colors"
                     >
-                        {isExporting
-                            ? <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                            : <Download className="w-4 h-4 text-brand-400" />
-                        }
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 text-brand-400" />
+                        )}
                         <div className="text-left">
                             <p className="text-sm font-medium text-base-100">
                                 {isExporting ? "Exporting..." : "Export Backup"}
                             </p>
-                            <p className="text-xs text-base-500">Download all leads and activity as JSON</p>
+                            <p className="text-xs text-base-500">
+                                Download all leads and activity as JSON
+                            </p>
                         </div>
                     </button>
 
-                    <label className={clsx(
-                        "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-base-800 hover:bg-base-700 transition-colors cursor-pointer",
-                        isImporting && "opacity-50 pointer-events-none"
-                    )}>
-                        {isImporting
-                            ? <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
-                            : <Upload className="w-4 h-4 text-brand-400" />
-                        }
+                    <label
+                        className={clsx(
+                            "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-base-800 hover:bg-base-700 transition-colors cursor-pointer",
+                            isImporting && "opacity-50 pointer-events-none"
+                        )}
+                    >
+                        {isImporting ? (
+                            <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
+                        ) : (
+                            <Upload className="w-4 h-4 text-brand-400" />
+                        )}
                         <div className="text-left">
                             <p className="text-sm font-medium text-base-100">
                                 {isImporting ? "Importing..." : "Import Backup"}
                             </p>
-                            <p className="text-xs text-base-500">Restore leads from a JSON backup file</p>
+                            <p className="text-xs text-base-500">
+                                Restore leads from a JSON backup file
+                            </p>
                         </div>
-                        <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                        <input
+                            type="file"
+                            accept=".json,application/json"
+                            onChange={handleImport}
+                            className="hidden"
+                        />
                     </label>
-                    {importError && <p className="text-xs text-red-400">{importError}</p>}
+                    {importError && (
+                        <p className="text-xs text-red-400">{importError}</p>
+                    )}
 
                     <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-base-800">
                         <div>
-                            <p className="text-sm font-medium text-base-100">Clear All Leads</p>
-                            <p className="text-xs text-base-500">Permanently delete all saved leads</p>
+                            <p className="text-sm font-medium text-base-100">
+                                Clear All Leads
+                            </p>
+                            <p className="text-xs text-base-500">
+                                Permanently delete all saved leads
+                            </p>
                         </div>
                         {clearConfirm === "leads" ? (
                             <div className="flex items-center gap-2">
@@ -502,7 +782,11 @@ export default function Settings() {
                                     disabled={isClearing}
                                     className="text-xs font-medium px-2 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
                                 >
-                                    {isClearing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes"}
+                                    {isClearing ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                        "Yes"
+                                    )}
                                 </button>
                                 <button
                                     onClick={() => setClearConfirm(null)}
@@ -523,8 +807,12 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-base-800">
                         <div>
-                            <p className="text-sm font-medium text-base-100">Clear Activity Log</p>
-                            <p className="text-xs text-base-500">Remove all activity history</p>
+                            <p className="text-sm font-medium text-base-100">
+                                Clear Activity Log
+                            </p>
+                            <p className="text-xs text-base-500">
+                                Remove all activity history
+                            </p>
                         </div>
                         {clearConfirm === "activity" ? (
                             <div className="flex items-center gap-2">
@@ -534,7 +822,11 @@ export default function Settings() {
                                     disabled={isClearing}
                                     className="text-xs font-medium px-2 py-1 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
                                 >
-                                    {isClearing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes"}
+                                    {isClearing ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                        "Yes"
+                                    )}
                                 </button>
                                 <button
                                     onClick={() => setClearConfirm(null)}
@@ -559,7 +851,8 @@ export default function Settings() {
                 <div className="space-y-1">
                     <p className="text-sm font-semibold text-base-100">Sproute</p>
                     <p className="text-xs text-base-500">
-                        v0.0.1 — AI-powered WhatsApp outreach for local business prospecting
+                        v0.0.1. AI-powered WhatsApp outreach for local business
+                        prospecting
                     </p>
                 </div>
             </div>

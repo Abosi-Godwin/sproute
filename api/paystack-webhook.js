@@ -1,5 +1,12 @@
 import crypto from "crypto";
-import { getAdmin, grantPro, paymentProblem, findUserId } from "./_paystack.js";
+import {
+    getAdmin,
+    grantPro,
+    metadataUserId,
+    paymentProblem,
+    planCodeOf,
+    findUserId
+} from "./_paystack.js";
 
 const signatureValid = (body, signature, secret) => {
     if (typeof signature !== "string") return false;
@@ -13,6 +20,16 @@ const signatureValid = (body, signature, secret) => {
     const b = Buffer.from(signature);
 
     return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
+
+const saveSubscriptionCode = async (db, userId, code) => {
+    const { data, error } = await db
+        .from("subscriptions")
+        .update({ paystack_subscription_code: code })
+        .eq("user_id", userId)
+        .select("user_id");
+    if (error) throw error;
+    return Array.isArray(data) && data.length > 0;
 };
 
 export default async function handler(req, res) {
@@ -61,12 +78,13 @@ export default async function handler(req, res) {
             }
 
             const result = await grantPro(db, {
+                userId: metadataUserId(data),
                 reference,
                 email: data.customer?.email,
                 amount: data.amount,
                 currency: data.currency,
                 customerCode: data.customer?.customer_code,
-                subscriptionCode: data.subscription_code,
+                recurring: Boolean(planCodeOf(data)),
                 source: "webhook"
             });
 
@@ -82,10 +100,11 @@ export default async function handler(req, res) {
                 : null;
 
             if (userId) {
-                await db
-                    .from("subscriptions")
-                    .update({ paystack_subscription_code: code })
-                    .eq("user_id", userId);
+                const saved = await saveSubscriptionCode(db, userId, code);
+                if (!saved) {
+                    await new Promise(resolve => setTimeout(resolve, 4000));
+                    await saveSubscriptionCode(db, userId, code);
+                }
             }
         }
 

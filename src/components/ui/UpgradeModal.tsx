@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, Sparkles, Check, Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
+import { posthog } from "../../lib/posthog";
 import toast from "react-hot-toast";
 
 declare global {
@@ -10,33 +11,57 @@ declare global {
     }
 }
 
+const PRICE_KOBO = 350000;
+
 export default function UpgradeModal({ onClose }: { onClose: () => void }) {
     const [isProcessing, setIsProcessing] = useState(false);
-    const { fetchSubscription } = useSubscriptionStore();
+    const { fetchSubscription, isPro } = useSubscriptionStore();
+    const paidRef = useRef(false);
+
+    const planCode =
+        (import.meta.env.VITE_PAYSTACK_PLAN_CODE as string | undefined)?.trim() ||
+        "";
+    const recurring = planCode.length > 0;
+    const alreadyPro = isPro();
 
     const handleUpgrade = async () => {
+        if (isProcessing) return;
+
         const {
             data: { user }
         } = await supabase.auth.getUser();
         if (!user?.email) {
-            toast.error(
-                "Could not find your account email — try signing in again"
-            );
+            toast.error("Could not find your account email. Try signing in again");
+            return;
+        }
+
+        const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+        if (!publicKey) {
+            posthog.capture("payment_verify_failed", {
+                status: 0,
+                detail: "missing_public_key"
+            });
+            toast.error("Payments are not set up yet. Contact support");
             return;
         }
 
         if (!window.PaystackPop) {
-            toast.error("Payment system not loaded — refresh and try again");
+            toast.error("Payment system not loaded. Refresh and try again");
             return;
         }
 
-        const handler = window.PaystackPop.setup({
-            key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        paidRef.current = false;
+        posthog.capture("payment_started", {
+            amount: PRICE_KOBO / 100,
+            recurring
+        });
+
+        const config: Record<string, unknown> = {
+            key: publicKey,
             email: user.email,
-            amount: 350000,
-            currency: "NGN",
             ref: `sproute_${user.id}_${Date.now()}`,
             metadata: {
+                user_id: user.id,
                 custom_fields: [
                     {
                         display_name: "Plan",
@@ -46,42 +71,121 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
                 ]
             },
             callback: function (response: { reference: string }) {
+                paidRef.current = true;
                 verifyPayment(response.reference);
             },
             onClose: function () {
+                if (paidRef.current) return;
+                posthog.capture("payment_cancelled");
                 toast("Payment cancelled");
             }
-        });
+        };
 
+        if (recurring) {
+            config.plan = planCode;
+        } else {
+            config.amount = PRICE_KOBO;
+            config.currency = "NGN";
+        }
+
+        const handler = window.PaystackPop.setup(config);
         handler.openIframe();
     };
 
     const verifyPayment = async (reference: string) => {
         setIsProcessing(true);
+        let confirmed = false;
+
         try {
+            const {
+                data: { session }
+            } = await supabase.auth.getSession();
+
             const res = await fetch("/api/paystack-verify", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(session
+                        ? { Authorization: `Bearer ${session.access_token}` }
+                        : {})
+                },
                 body: JSON.stringify({ reference })
             });
 
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
 
-            if (res.ok && data.success) {
-                await fetchSubscription();
-                toast.success("Welcome to Pro! Your account is upgraded.");
-                onClose();
+            if (res.ok && data?.success) {
+                confirmed = true;
             } else {
-                toast.error(
-                    "Payment received but verification failed — contact support"
-                );
+                posthog.capture("payment_verify_failed", {
+                    reference,
+                    status: res.status,
+                    detail: data?.message ?? ""
+                });
             }
-        } catch {
-            toast.error("Could not verify payment — contact support");
-        } finally {
-            setIsProcessing(false);
+        } catch (err: any) {
+            posthog.capture("payment_verify_failed", {
+                reference,
+                status: 0,
+                detail: err?.message ?? ""
+            });
         }
+
+        await fetchSubscription();
+
+        if (!confirmed) {
+            confirmed = useSubscriptionStore.getState().isPro();
+        }
+
+        setIsProcessing(false);
+
+        if (confirmed) {
+            posthog.capture("payment_success", { reference, recurring });
+            toast.success("Welcome to Pro! Your account is upgraded.");
+            onClose();
+            return;
+        }
+
+        toast.error(
+            `Payment received but not confirmed yet. Contact support with reference ${reference}`,
+            { duration: 10000 }
+        );
     };
+
+    if (alreadyPro) {
+        return (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+                <div className="bg-base-900 border border-base-800 rounded-2xl p-6 max-w-sm w-full space-y-5">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-brand-400" />
+                            <h3 className="font-display font-bold text-lg text-base-50">
+                                Daily limit reached
+                            </h3>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="text-base-500 hover:text-base-300"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-base-400">
+                        You have used all your Pro AI generations for today. They
+                        reset at 1:00 AM Nigeria time.
+                    </p>
+
+                    <button
+                        onClick={onClose}
+                        className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-colors"
+                    >
+                        Got it
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
@@ -123,9 +227,11 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
 
                 <div className="bg-base-800 rounded-xl p-4 text-center">
                     <p className="font-display text-3xl font-bold text-base-50">
-                        ₦3,500
+                        ₦{(PRICE_KOBO / 100).toLocaleString()}
                     </p>
-                    <p className="text-xs text-base-500">per month</p>
+                    <p className="text-xs text-base-500">
+                        {recurring ? "per month" : "for 30 days"}
+                    </p>
                 </div>
 
                 <button
@@ -144,7 +250,9 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
                 </button>
 
                 <p className="text-xs text-base-600 text-center">
-                    Your account upgrades instantly after payment.
+                    {recurring
+                        ? "Renews every month until you cancel. Your account upgrades instantly after payment."
+                        : "One payment for 30 days of Pro. Your account upgrades instantly after payment."}
                 </p>
             </div>
         </div>
