@@ -1,9 +1,6 @@
-
-import { Globe, Zap, TrendingUp, MessageCircle, Send } from "lucide-react";
-import { motion } from "framer-motion";
+import { Globe, Zap, TrendingUp, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router";
-import { Lead, LeadStatus, ActivityLog } from "../../types";
-import { getTodayMessagedCount } from "../../utils/todayStats";
+import { Lead, ActivityLog } from "../../types";
 import { clsx } from "clsx";
 
 interface StatCardProps {
@@ -23,13 +20,8 @@ function StatCard({
     iconBg,
     onClick
 }: StatCardProps) {
-    return (
-        <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onClick}
-            className="w-full text-left bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3 hover:border-base-700 transition-colors"
-        >
+    const content = (
+        <>
             <div className="flex items-center gap-3">
                 <div
                     className={clsx(
@@ -44,14 +36,34 @@ function StatCard({
             <p className={clsx("text-2xl font-display font-bold", color)}>
                 {value}
             </p>
-        </motion.button>
+        </>
+    );
+
+    if (!onClick) {
+        return (
+            <div className="w-full text-left bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3">
+                {content}
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left bg-base-900 border border-base-800 rounded-xl p-4 flex flex-col gap-3 transition-all duration-150 hover:scale-[1.02] hover:border-base-700 active:scale-[0.98]"
+        >
+            {content}
+        </button>
     );
 }
+
 interface StatsRowProps {
     leads: Lead[];
     activity: ActivityLog[];
 }
-export default function StatsRow({ leads, activity }: StatsRowProps) {
+
+export default function StatsRow({ leads }: StatsRowProps) {
     const navigate = useNavigate();
 
     const total = leads.length;
@@ -63,9 +75,8 @@ export default function StatsRow({ leads, activity }: StatsRowProps) {
     const converted = leads.filter(l => l.status === "converted").length;
     const conversionRate =
         total > 0 ? Math.round((converted / total) * 100) : 0;
-    const todayMessaged = getTodayMessagedCount(activity);
 
-    const stats = [
+    const stats: StatCardProps[] = [
         {
             label: "No Website",
             value: noWebsite,
@@ -101,7 +112,7 @@ export default function StatsRow({ leads, activity }: StatsRowProps) {
 
     return (
         <div className="grid grid-cols-2 gap-3">
-            {stats.slice(0, 4).map(stat => (
+            {stats.map(stat => (
                 <StatCard key={stat.label} {...stat} />
             ))}
         </div>

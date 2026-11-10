@@ -64,6 +64,46 @@ export default defineConfig({
             }
         })
     ],
+    build: {
+        rolldownOptions: {
+            output: {
+                codeSplitting: {
+                    groups: [
+                        {
+                            name: "react",
+                            test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/,
+                            priority: 40
+                        },
+                        {
+                            name: "supabase",
+                            test: /node_modules[\\/]@supabase[\\/]/,
+                            priority: 30
+                        },
+                        {
+                            name: "posthog",
+                            test: /node_modules[\\/]posthog-js[\\/]/,
+                            priority: 30
+                        },
+                        {
+                            name: "motion",
+                            test: /node_modules[\\/](framer-motion|motion|motion-dom|motion-utils)[\\/]/,
+                            priority: 30
+                        },
+                        {
+                            name: "query",
+                            test: /node_modules[\\/]@tanstack[\\/]/,
+                            priority: 20
+                        },
+                        {
+                            name: "vendor",
+                            test: /node_modules/,
+                            priority: 10
+                        }
+                    ]
+                }
+            }
+        }
+    },
     server: {
         port: 3000,
         open: true,

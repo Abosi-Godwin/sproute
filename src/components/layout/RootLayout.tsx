@@ -1,15 +1,18 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { Outlet, Navigate } from "react-router";
 import toast from "react-hot-toast";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
-import OnboardingOverlay from "../onboarding/OnboardingOverlay";
 import ScrollToTop from "./ScrollToTop";
 import { supabase } from "../../lib/supabase";
 import { useUIStore } from "../../lib/stores/useUIStore";
 import { useAuthStore } from "../../lib/stores/useAuthStore";
 import { useLeadsStore } from "../../lib/stores/useLeadsStore";
 import { Loader2 } from "lucide-react";
+
+const OnboardingOverlay = lazy(
+    () => import("../onboarding/OnboardingOverlay")
+);
 
 export default function RootLayout() {
     const { hasOnboarded } = useUIStore();
@@ -77,7 +80,11 @@ export default function RootLayout() {
     return (
         <div className="flex h-screen overflow-hidden bg-base-950">
             <ScrollToTop />
-            {showOnboarding && <OnboardingOverlay />}
+            {showOnboarding && (
+                <Suspense fallback={null}>
+                    <OnboardingOverlay />
+                </Suspense>
+            )}
             <div className="hidden md:block">
                 <Sidebar />
             </div>

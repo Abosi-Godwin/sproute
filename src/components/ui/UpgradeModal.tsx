@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Sparkles, Check, Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useSubscriptionStore } from "../../lib/stores/useSubscriptionStore";
@@ -12,9 +12,41 @@ declare global {
 }
 
 const PRICE_KOBO = 350000;
+const PAYSTACK_SRC = "https://js.paystack.co/v1/inline.js";
+
+const waitFor = (check: () => boolean, timeoutMs: number) =>
+    new Promise<boolean>(resolve => {
+        const startedAt = Date.now();
+        const tick = () => {
+            if (check()) return resolve(true);
+            if (Date.now() - startedAt > timeoutMs) return resolve(false);
+            setTimeout(tick, 100);
+        };
+        tick();
+    });
+
+const loadPaystack = async () => {
+    if (window.PaystackPop) return true;
+
+    const selector = `script[src="${PAYSTACK_SRC}"]`;
+
+    if (!document.querySelector(selector)) {
+        const script = document.createElement("script");
+        script.src = PAYSTACK_SRC;
+        script.async = true;
+        document.head.appendChild(script);
+    }
+
+    const loaded = await waitFor(() => Boolean(window.PaystackPop), 10000);
+
+    if (!loaded) document.querySelector(selector)?.remove();
+
+    return loaded;
+};
 
 export default function UpgradeModal({ onClose }: { onClose: () => void }) {
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isOpening, setIsOpening] = useState(false);
     const { fetchSubscription, isPro } = useSubscriptionStore();
     const paidRef = useRef(false);
 
@@ -24,72 +56,86 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
     const recurring = planCode.length > 0;
     const alreadyPro = isPro();
 
+    useEffect(() => {
+        if (!alreadyPro) loadPaystack();
+    }, [alreadyPro]);
+
     const handleUpgrade = async () => {
-        if (isProcessing) return;
+        if (isProcessing || isOpening) return;
+        setIsOpening(true);
 
-        const {
-            data: { user }
-        } = await supabase.auth.getUser();
-        if (!user?.email) {
-            toast.error("Could not find your account email. Try signing in again");
-            return;
-        }
-
-        const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-        if (!publicKey) {
-            posthog.capture("payment_verify_failed", {
-                status: 0,
-                detail: "missing_public_key"
-            });
-            toast.error("Payments are not set up yet. Contact support");
-            return;
-        }
-
-        if (!window.PaystackPop) {
-            toast.error("Payment system not loaded. Refresh and try again");
-            return;
-        }
-
-        paidRef.current = false;
-        posthog.capture("payment_started", {
-            amount: PRICE_KOBO / 100,
-            recurring
-        });
-
-        const config: Record<string, unknown> = {
-            key: publicKey,
-            email: user.email,
-            ref: `sproute_${user.id}_${Date.now()}`,
-            metadata: {
-                user_id: user.id,
-                custom_fields: [
-                    {
-                        display_name: "Plan",
-                        variable_name: "plan",
-                        value: "Sproute Pro"
-                    }
-                ]
-            },
-            callback: function (response: { reference: string }) {
-                paidRef.current = true;
-                verifyPayment(response.reference);
-            },
-            onClose: function () {
-                if (paidRef.current) return;
-                posthog.capture("payment_cancelled");
-                toast("Payment cancelled");
+        try {
+            const {
+                data: { user }
+            } = await supabase.auth.getUser();
+            if (!user?.email) {
+                toast.error(
+                    "Could not find your account email. Try signing in again"
+                );
+                return;
             }
-        };
 
-        if (recurring) {
-            config.plan = planCode;
-        } else {
-            config.amount = PRICE_KOBO;
-            config.currency = "NGN";
+            const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+            if (!publicKey) {
+                posthog.capture("payment_verify_failed", {
+                    status: 0,
+                    detail: "missing_public_key"
+                });
+                toast.error("Payments are not set up yet. Contact support");
+                return;
+            }
+
+            const loaded = await loadPaystack();
+            if (!loaded || !window.PaystackPop) {
+                toast.error(
+                    "Payment system not loaded. Check your connection and try again"
+                );
+                return;
+            }
+
+            paidRef.current = false;
+            posthog.capture("payment_started", {
+                amount: PRICE_KOBO / 100,
+                recurring
+            });
+
+            const config: Record<string, unknown> = {
+                key: publicKey,
+                email: user.email,
+                ref: `sproute_${user.id}_${Date.now()}`,
+                metadata: {
+                    user_id: user.id,
+                    custom_fields: [
+                        {
+                            display_name: "Plan",
+                            variable_name: "plan",
+                            value: "Sproute Pro"
+                        }
+                    ]
+                },
+                callback: function (response: { reference: string }) {
+                    paidRef.current = true;
+                    verifyPayment(response.reference);
+                },
+                onClose: function () {
+                    if (paidRef.current) return;
+                    posthog.capture("payment_cancelled");
+                    toast("Payment cancelled");
+                }
+            };
+
+            if (recurring) {
+                config.plan = planCode;
+            } else {
+                config.amount = PRICE_KOBO;
+                config.currency = "NGN";
+            }
+
+            const handler = window.PaystackPop.setup(config);
+            handler.openIframe();
+        } finally {
+            setIsOpening(false);
         }
-
-        const handler = window.PaystackPop.setup(config);
-        handler.openIframe();
     };
 
     const verifyPayment = async (reference: string) => {
@@ -236,13 +282,18 @@ export default function UpgradeModal({ onClose }: { onClose: () => void }) {
 
                 <button
                     onClick={handleUpgrade}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isOpening}
                     className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
                 >
                     {isProcessing ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin" />{" "}
                             Verifying...
+                        </>
+                    ) : isOpening ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                            Opening checkout...
                         </>
                     ) : (
                         "Upgrade Now"
